@@ -1,0 +1,8 @@
+[package]
+name = "simpleOpenGL"
+version = "0.1.0"
+authors = ["mahera <mahera5397@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+imagefmt="4.0.0"
