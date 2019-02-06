@@ -93,6 +93,18 @@ impl TGAImage{
 }
 
 
+#[derive(PartialEq,Debug)]
+struct Point{
+    pub x:usize,
+    pub y:usize,
+}
+impl Point{
+    fn new(x:usize,y:usize)->Point{
+        Point{x,y}
+    }
+}
+/*
+
 const FILE_PATH:&str="image.tga";
 
 fn main() {
@@ -161,4 +173,137 @@ fn read_file()->(Vec<[f32;3]>,Vec<[usize;3]>)
         }
     }
     (points,triangles)
+}*/
+struct Triangle((usize,usize),(usize,usize),(usize,usize));
+
+const PATH:&str="triangle.tga";
+
+fn main(){
+    let WHITE:TGAColor=TGAColor::new(255,255,255,255);
+    let RED:TGAColor=TGAColor::new(255,0,0,255);
+    let GREEN:TGAColor=TGAColor::new(0,255,0,255);
+
+    let mut tga_image=TGAImage::new(2000,2000);
+
+    let final_coord=[Point::new(1500,50),Point::new(100,1500),Point::new(1800,1800)];
+
+    tga_image.draw_line(final_coord[0].x, final_coord[0].y
+                        , final_coord[1].x, final_coord[1].y, &RED);
+    tga_image.draw_line(final_coord[1].x, final_coord[1].y
+                        , final_coord[2].x, final_coord[2].y, &RED);
+    tga_image.draw_line(final_coord[2].x, final_coord[2].y
+                        , final_coord[0].x, final_coord[0].y, &RED);
+
+    let mut two_min_y=false;
+    let mut y_apex=None;
+    let mut bottom_dot=None;
+    for dot in final_coord.iter(){
+        if y_apex==None{
+            y_apex=Some(dot);
+            bottom_dot=Some(dot.y);
+            continue
+        }
+        if dot.y<=y_apex.unwrap().y{
+            if dot.y==y_apex.unwrap().y{two_min_y=true;}
+            else {
+                y_apex=Some(dot);
+                two_min_y=false;}
+        }
+        if dot.y>bottom_dot.unwrap(){
+            bottom_dot=Some(dot.y);
+        }
+    }
+    let apex_dot=y_apex.unwrap();
+    let bottom_dot=bottom_dot.unwrap();
+    let mut left_dot=None;
+    for dot in final_coord.iter(){
+        if dot==apex_dot {continue}
+        if left_dot==None {
+            left_dot=Some(dot);
+            continue
+        }
+        if dot.x<left_dot.unwrap().x{
+            left_dot=Some(dot);
+        }
+    }
+    let left_dot=left_dot.unwrap();
+    let mut right_dot=None;
+    for dot in final_coord.iter(){
+        if dot!=apex_dot && dot!=left_dot{right_dot=Some(dot)}
+    };
+    let right_dot=right_dot.unwrap();
+
+    let bottom_dot_right=Point::new(apex_dot.x,right_dot.y);
+    let mut tg_right=line_length(&bottom_dot_right,right_dot) / line_length(apex_dot,&bottom_dot_right);
+
+    let bottom_dot_left=Point::new(apex_dot.x,left_dot.y);
+    println!("bottom dot left {:?}, right {:?}, bottom {:?}, apex {:?}",bottom_dot_left,bottom_dot_right,bottom_dot,apex_dot);
+    let mut tg_left=line_length(&bottom_dot_left,left_dot) / line_length(apex_dot,&bottom_dot_left);
+    println!("tg left {}",tg_left);
+
+
+    let mut counter=0;
+    for dot in final_coord.iter(){
+        if dot.x<apex_dot.x{counter+=1;}
+    }
+    let clousure;
+    match counter {
+        0=>clousure=Some(both_right as fn(&usize,&usize,&usize) -> (usize,usize)),
+        1=>clousure=Some(one_left_one_right as fn(&usize,&usize,&usize) -> (usize,usize)),
+        _=>{
+            clousure=Some(both_left as fn(&usize,&usize,&usize) -> (usize,usize));
+            let swap=tg_right;
+            tg_right=tg_left;
+            tg_left=swap;
+        }
+    }
+
+    for dy in apex_dot.y..bottom_dot{
+        //println!("dy is {}",dy);
+        let right=(dy as f64*tg_right) as usize;
+        let left=(dy as f64*tg_left) as usize;
+        //println!("right is {} left is {}",tg_right,tg_left);
+        let (start,length)=clousure.unwrap()(&left,&right,&apex_dot.x);
+       // println!("start is {} length is {}",start,length);
+        for x_coord in start..start+length{
+            tga_image.set_pixel_unchecked(x_coord,dy,&GREEN);
+        }
+    }
+
+    tga_image.draw_line(final_coord[0].x, final_coord[0].y
+                        , final_coord[1].x, final_coord[1].y, &RED);
+    tga_image.draw_line(final_coord[1].x, final_coord[1].y
+                        , final_coord[2].x, final_coord[2].y, &RED);
+    tga_image.draw_line(final_coord[2].x, final_coord[2].y
+                        , final_coord[0].x, final_coord[0].y, &RED);
+
+    tga_image.write_tga_file(PATH);
+}
+
+fn line_length(start:& Point,end:& Point)->f64{
+    ((start.x as f64 -end.x as f64)*
+        (start.x as f64 -end.x as f64)+(start.y as f64 -end.y as f64 )*
+        (start.y as f64 -end.y as f64 ) ).sqrt()
+}
+
+fn both_right(left:&usize,right:&usize,apex_x:&usize)->(usize,usize){
+    let length=right-left;
+    let start_point=apex_x+left;
+    (start_point,length)
+}
+
+fn both_left(left:&usize,right:&usize,apex_x:&usize)->(usize,usize){
+    let right=if right>apex_x {apex_x}
+    else { right };
+    let length=right-left;
+    let start_point=apex_x-right;
+    (start_point,length)
+}
+
+fn one_left_one_right(left:&usize,right:&usize,apex_x:&usize)->(usize,usize){
+    let left=if left>apex_x {apex_x}
+    else { left };
+    let length=left+right;
+    let start_point=apex_x-left;
+    (start_point,length)
 }
