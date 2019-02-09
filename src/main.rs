@@ -12,14 +12,14 @@ use simpleOpenGL::plane::TGAImage;
 const FILE_OUTPUT_PATH:&str="image.tga";
 const FILE_INPUT_PATH:&str="african_head.obj";
 const LIGHT_DIR:Vector=Vector(0.0,0.0,1.0);
-const SIZE:usize=3000;
+const SIZE:usize=10000;
 
 fn main() {
     let mut tga_image=TGAImage::new(SIZE,SIZE);
 
 
     let triangles=read_file(FILE_INPUT_PATH);
-    for triangle in triangles{
+    for triangle in &triangles{
 
         let vec0=triangle[0].to_vector(&triangle[1]);
         let vec1=triangle[0].to_vector(&triangle[2]);
@@ -36,8 +36,22 @@ fn main() {
                 .collect::<Vec<Point>>()
                 .as_mut_slice());
         }
+
     }
+//    let color=TGAColor::new(255,0,0,255);
+//    for triangle in triangles{
+//        tga_image.draw_line(&triangle[0].to_point(SIZE,SIZE),&triangle[1].to_point(SIZE,SIZE),&color);
+//        tga_image.draw_line(&triangle[0].to_point(SIZE,SIZE),&triangle[2].to_point(SIZE,SIZE),&color);
+//        tga_image.draw_line(&triangle[1].to_point(SIZE,SIZE),&triangle[2].to_point(SIZE,SIZE),&color);
+//
+//    }
     tga_image.flip_vertically();
+
+//    tga_image.fill_triangle(color,[Point::new(500,50,0),Point::new(2500,50,0),Point::new(2000,2000,0)].as_mut());
+//    tga_image.draw_line(&Point::new(500,50,0),&Point::new(2500,50,0),&TGAColor::new(0,255,0,255));
+//    tga_image.draw_line(&Point::new(500,50,0),&Point::new(2000,2000,0),&TGAColor::new(0,255,0,255));
+//    tga_image.draw_line(&Point::new(2000,2000,0),&Point::new(2500,50,0),&TGAColor::new(0,255,0,255));
+
     tga_image.write_tga_file(FILE_OUTPUT_PATH);
 }
 
@@ -54,9 +68,9 @@ fn read_file(file_path:&str)->Vec<Vec<DPoint>>
             Ok(line)=> {
                 if line.starts_with("v "){
                     let line=&line[2..];
-                    let mut point:[f64;3]=[0.0;3];
+                    let mut point:[f32;3]=[0.0;3];
                     for (index,coord) in line.split_whitespace().enumerate(){
-                        point[index]=coord.parse::<f64>().unwrap();
+                        point[index]=coord.parse::<f32>().unwrap();
                     }
                     points.push(point);
                 }
