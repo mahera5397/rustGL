@@ -1,6 +1,8 @@
 use imagefmt::ColFmt;
 use imagefmt::Error;
 use imagefmt::ColType;
+use std::f64;
+use crate::dimensional::Vector;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -36,29 +38,33 @@ pub fn line_length(start:& Point,end:& Point)->f64{
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,
-    pixels:Vec<TGAColor>
+    pixels:Vec<TGAColor>,
+    z_buff:Vec<f64>
 }
 
 
 impl TGAImage{
     pub fn new(height:usize, width:usize)->TGAImage{
-        let mut pixels=Vec::new();
-        for _ in 0..height*width{
-            pixels.push(TGAColor::new(255,255,255,255));
-        }
-        TGAImage{height,width, pixels}
+        let pixels=vec![TGAColor::new(255,255,255,255);height*width];
+        let z_buff=vec![f64::MIN;height*width];
+        TGAImage{height,width, pixels,z_buff}
     }
 
-    pub fn set_pixel(&mut self,point:& Point,pixel:& TGAColor)->Result<(),String>{
+    pub fn set_pixel(&mut self,point:& Point,pixel: TGAColor)->Result<(),String>{
         if let Err(e)=self.check_boundaries(point){ return Err(e) }
         //TODO lifetime reference
-        self.pixels[point.y*self.width+point.x]=*pixel;
+        self.set_pixel_unchecked(point.x,point.y,point.z as f64,pixel);
         Ok(())
     }
 
-    fn set_pixel_unchecked(&mut self,x:usize,y:usize,pixel:& TGAColor){
-        self.pixels[y*self.width+x]=*pixel;
+    fn set_pixel_unchecked(&mut self,x:usize,y:usize,z:f64,pixel: TGAColor){
+        let index=y*self.width+x;
+        if self.z_buff[index]<z{
+            self.pixels[index]=pixel;
+            self.z_buff[index]=z;
+        }
     }
+
     fn as_vec(&self)->Vec<u8>{
         TGAColor::from_arr_to_arr(self.pixels.as_slice())
     }
@@ -81,10 +87,10 @@ impl TGAImage{
         let (min, max) = if x_is_greater { (minx, maxx) } else { (miny, maxy) };
 
         for t in min..max {
-            let float: f32 = (t - min) as f32 / (max - min) as f32;
-            let x: usize = ((start.x as f32) * (1.0 - float) + (end.x as f32) * float) as usize;
-            let y: usize = ((start.y as f32) * (1.0 - float) + (end.y as f32) * float) as usize;
-            self.set_pixel_unchecked(x, y, color);
+            let float: f64 = (t - min) as f64 / (max - min) as f64;
+            let x: usize = ((start.x as f64) * (1.0 - float) + (end.x as f64) * float) as usize;
+            let y: usize = ((start.y as f64) * (1.0 - float) + (end.y as f64) * float) as usize;
+            self.set_pixel_unchecked(x, y, 0.0,color.clone());
         }
         Ok(())
     }
@@ -96,76 +102,112 @@ impl TGAImage{
         Ok(())
     }
 
-    pub fn fill_triangle(&mut self, color: &TGAColor, final_coord: &[Point]) {
-        let mut first_dot = None;
-        let mut last_dot = None;
-        for point in final_coord{
-            if first_dot == None && last_dot==None {
-                first_dot = Some(point);
-                last_dot = Some(point);
-                continue
-            }
-            if first_dot.unwrap().y>point.y{first_dot=Some(point)}
-            if last_dot.unwrap().y<point.y{last_dot=Some(point)}
-        }
-        let first_dot=first_dot.unwrap();
-        let last_dot=last_dot.unwrap();
-        let mut middle_dot = None;
-        for dot in final_coord.iter() {
-            if dot != first_dot && dot != last_dot { middle_dot = Some(dot) }
-        };
-        //if no middle dot then triangle cant exist
-        if middle_dot==None{return;}
-        let middle_dot=middle_dot.unwrap();
+    pub fn fill_triangle(&mut self, color: TGAColor, final_coord: &mut [Point]) {
+        final_coord.sort_by(|a,b|a.y.partial_cmp(&b.y).unwrap());
+        let first_dot = &final_coord[0];
+        let last_dot =  &final_coord[2];
+        let middle_dot = &final_coord[1];
 
-        let mut y_axis_middle=Point::new(first_dot.x,middle_dot.y);
-        let y_axis_last=Point::new(first_dot.x,last_dot.y);
 
-        let mut tg_migle = line_length(&y_axis_middle, middle_dot) / line_length(first_dot, &y_axis_middle);
-        if tg_migle.is_infinite(){tg_migle=0.0}
-        let mut tg_last = line_length(&y_axis_last, last_dot) / line_length(first_dot, &y_axis_last);
-        if tg_last.is_infinite(){tg_last=0.0}
-        if middle_dot.x<first_dot.x{tg_migle=tg_migle*(-1.0)}
-        if last_dot.x<first_dot.x{tg_last=tg_last*(-1.0)}
+        let tg_last=first_dot.to_vector(last_dot);
+        let mut tg_middle=first_dot.to_vector(middle_dot);
 
-        let (mut on_mid_border,mut on_last_border)=
-            (first_dot.x as f64-tg_migle,first_dot.x as f64-tg_last);
+        let (mut tg_middle_x,mut tg_last_x)=(tg_middle.0/tg_middle.1,tg_last.0/tg_last.1);
+        let (mut tg_middle_x_to_z,tg_last_x_to_z)=(tg_middle.2/tg_middle.0,tg_last.2/tg_last.0);
+        let (mut tg_middle_z,tg_last_z)=(tg_middle.2/tg_middle.1,tg_last.2/tg_last.1);
+
+        let (mut on_mid_border_dx,mut on_last_border_dx)=
+            (first_dot.x as f64-tg_middle_x,first_dot.x as f64-tg_last_x);
+
+        let (mut on_mid_border_dz,mut on_last_border_dz)=
+            (first_dot.z as f64-tg_middle_z,first_dot.z as f64-tg_last_z);
+
         for dy in first_dot.y..middle_dot.y+1 {
-            on_mid_border = on_mid_border + tg_migle;
-            on_last_border = on_last_border + tg_last;
+            on_mid_border_dx = on_mid_border_dx + tg_middle_x;
+            on_last_border_dx = on_last_border_dx + tg_last_x;
 
-            let (start, end) = if on_mid_border > on_last_border { (on_last_border as usize, on_mid_border as usize) } else { (on_mid_border as usize, on_last_border as usize) };
+            on_mid_border_dz = on_mid_border_dz + tg_middle_z;
+            on_last_border_dz = on_last_border_dz + tg_last_z;
+
+            let (start, end,dz_start,tg_x_z) =
+                if on_mid_border_dx > on_last_border_dx {
+                    (on_last_border_dx as usize, on_mid_border_dx as usize
+                    ,on_last_border_dz,tg_last_x_to_z) }
+            else {
+                (on_mid_border_dx as usize, on_last_border_dx as usize
+                ,on_mid_border_dz,tg_middle_x_to_z) };
+
             if start!=end {
+                let mut z_coord=dz_start-tg_x_z;
                 for x_coord in start..end + 1 {
-                    self.set_pixel_unchecked(x_coord, dy, &color);
+                    z_coord+=tg_x_z;
+                    self.set_pixel_unchecked(x_coord, dy,z_coord, color);
                 }
             }
         }
-        y_axis_middle=Point::new(last_dot.x,middle_dot.y);
-        tg_migle = line_length(&y_axis_middle, middle_dot) / line_length(last_dot, &y_axis_middle);
-        if tg_migle.is_infinite(){tg_migle=0.0}
-        if middle_dot.x>last_dot.x{tg_migle=tg_migle*(-1.0)}
+
+        tg_middle=middle_dot.to_vector(last_dot);
+        tg_middle_x=tg_middle.0/tg_middle.1;
+        tg_middle_x_to_z=tg_middle.2/tg_middle.0;
+        tg_middle_z=tg_middle.2/tg_middle.1;
+
+
         for dy in middle_dot.y+1..last_dot.y{
-            on_mid_border = on_mid_border + tg_migle;
-            on_last_border = on_last_border + tg_last;
-            let (start, end) = if on_mid_border > on_last_border { (on_last_border as usize, on_mid_border as usize) } else { (on_mid_border  as usize, on_last_border as usize) };
+            on_mid_border_dx = on_mid_border_dx + tg_middle_x;
+            on_last_border_dx = on_last_border_dx + tg_last_x;
+
+            on_mid_border_dz = on_mid_border_dz + tg_middle_z;
+            on_last_border_dz = on_last_border_dz + tg_last_z;
+
+                let (start, end,dz_start,tg_x_z) =
+                    if on_mid_border_dx > on_last_border_dx {
+                        (on_last_border_dx as usize, on_mid_border_dx as usize
+                         ,on_last_border_dz,tg_last_x_to_z) }
+                    else {
+                        (on_mid_border_dx as usize, on_last_border_dx as usize
+                         ,on_mid_border_dz,tg_middle_x_to_z) };
+
             if start!=end {
+                let mut z_coord=dz_start-tg_x_z;
                 for x_coord in start..end + 1 {
-                    self.set_pixel_unchecked(x_coord, dy, &color);
+                    z_coord=z_coord+tg_x_z;
+                    self.set_pixel_unchecked(x_coord, dy,z_coord, color);
                 }
             }
         }
     }
+
+    pub fn flip_vertically(&mut self){
+        let mut top_half=Vec::new();
+        for y in 0..self.height{
+            top_half.append(&mut self.pixels[self.width*(self.height-y-1)..self.width*(self.height-y)].to_vec())
+        }
+        self.pixels.swap_with_slice(&mut top_half);
+    }
 }
 
 
-#[derive(PartialEq,Debug,Clone)]
+#[derive(Debug,Clone)]
 pub struct Point{
     pub x:usize,
     pub y:usize,
+    pub z:usize
 }
 impl Point{
-    pub fn new(x:usize,y:usize)->Point{
-        Point{x,y}
+    pub fn new(x:usize,y:usize,z:usize)->Point{
+        Point{x,y,z}
+    }
+    pub fn to_vector(&self,end_of_vector:&Point) ->Vector{
+        Vector(end_of_vector.x as f64-self.x as f64,
+               end_of_vector.y as f64-self.y as f64,
+               end_of_vector.z as f64-self.z as f64)
+    }
+}
+impl PartialEq for Point{
+    fn eq(&self, other: &Point) -> bool {
+        self.x==other.x && self.y == other.y && self.z ==other.z
+    }
+    fn ne(&self,other:&Point)->bool{
+        self.x!=other.x || self.y != other.y || self.z !=other.z
     }
 }

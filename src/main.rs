@@ -12,14 +12,9 @@ use simpleOpenGL::plane::TGAImage;
 const FILE_OUTPUT_PATH:&str="image.tga";
 const FILE_INPUT_PATH:&str="african_head.obj";
 const LIGHT_DIR:Vector=Vector(0.0,0.0,1.0);
-const SIZE:usize=10000;
+const SIZE:usize=3000;
 
 fn main() {
-    let WHITE:TGAColor=TGAColor::new(255,255,255,255);
-    let RED:TGAColor=TGAColor::new(255,0,0,255);
-    let GREEN:TGAColor=TGAColor::new(0,255,0,255);
-
-
     let mut tga_image=TGAImage::new(SIZE,SIZE);
 
 
@@ -35,14 +30,14 @@ fn main() {
 
         if intensity>0.0{
             let color=TGAColor::new((255.0*intensity) as u8,(255.0*intensity) as u8,(255.0*intensity) as u8,255);
-            tga_image.fill_triangle(&color,triangle
+            tga_image.fill_triangle(color,triangle
                 .iter()
                 .map(|element|element.to_point(SIZE,SIZE))
                 .collect::<Vec<Point>>()
-                .as_slice());
+                .as_mut_slice());
         }
     }
-
+    tga_image.flip_vertically();
     tga_image.write_tga_file(FILE_OUTPUT_PATH);
 }
 
@@ -59,9 +54,9 @@ fn read_file(file_path:&str)->Vec<Vec<DPoint>>
             Ok(line)=> {
                 if line.starts_with("v "){
                     let line=&line[2..];
-                    let mut point:[f32;3]=[0.0;3];
+                    let mut point:[f64;3]=[0.0;3];
                     for (index,coord) in line.split_whitespace().enumerate(){
-                        point[index]=coord.parse::<f32>().unwrap();
+                        point[index]=coord.parse::<f64>().unwrap();
                     }
                     points.push(point);
                 }
@@ -75,7 +70,7 @@ fn read_file(file_path:&str)->Vec<Vec<DPoint>>
                     }
                     triangles.push(triangle);                }
             },
-            Err(e) =>()
+            Err(_e) =>()
         }
     }
     let mut response =Vec::new();
