@@ -41,14 +41,18 @@ impl Vector{
 pub struct DPoint {
     pub x:f32,
     pub y:f32,
-    pub z:f32}
+    pub z:f32,
+}
 impl DPoint {
     pub fn new(x:f32,y:f32,z:f32)-> DPoint {
         DPoint {x,y,z}
     }
-    pub fn to_point(&self,height:usize,width:usize)->Point{
+    pub fn to_plane_point(&self, height:usize, width:usize) ->Point{
         Point::new((((self.x +1.0)/2.0)*width as f32 )as usize,(((self.y +1.0)/2.0)*height as f32) as usize,
-                   ((self.z/2.0)*height as f32) as usize)
+                   (((self.z +1.0)/2.0)*height as f32) as usize)
+    }
+    pub fn to_text_point(&self,height:usize,width:usize)->Point{
+        Point::new((self.x * width as f32) as usize,(self.y*height as f32) as usize,0)
     }
     pub fn to_vector(&self, end_of_vector:&DPoint) ->Vector{
         Vector(end_of_vector.x-self.x,end_of_vector.y-self.y,end_of_vector.z-self.z)

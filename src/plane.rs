@@ -3,7 +3,9 @@ use imagefmt::Error;
 use imagefmt::ColType;
 use std::f32;
 use crate::dimensional::Vector;
-use core::mem;
+use crate::texture::Texture;
+use crate::texture::Triangle;
+use std::ops::Mul;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -27,6 +29,11 @@ impl TGAColor{
             }
         }
         respond
+    }
+    pub fn add_intensity(&mut self,intensity:f32){
+        self.red=(self.red as f32 * intensity) as u8;
+        self.red=(self.green as f32 * intensity) as u8;
+        self.red=(self.blue as f32 * intensity) as u8;
     }
 }
 
@@ -61,22 +68,8 @@ impl TGAImage {
     fn set_pixel_unchecked(&mut self, x: usize, y: usize, z: f32, pixel: TGAColor) {
         let index = y * self.width + x;
         if self.z_buff[index] < z {
-            if self.z_buff[index]>f32::MIN{
-                if x>250 && y<250{
-
-                    println!("x {}, y {}",x,y);
-                    println!("z {} , z in buffer {}",z,self.z_buff[index]);
-                }
-            }
             self.pixels[index] = pixel;
             self.z_buff[index] = z;
-        }
-        else if self.z_buff[index]>f32::MIN{
-            if x>250 && y<250 && self.z_buff[index]-z<10.0{
-
-                println!("bounced x {}, y {}",x,y);
-                println!("bounced z {} , z in buffer {}",z,self.z_buff[index]);
-            }
         }
     }
 
@@ -95,7 +88,6 @@ impl TGAImage {
 
         let (miny, maxy) = if start.y > end.y { (end.y, start.y) } else { (start.y, end.y) };
         let (minx, maxx) = if start.x > end.x { (end.x, start.x) } else { (start.x, end.x) };
-
 
         let x_is_greater = maxx - minx > maxy - miny;
 
@@ -117,14 +109,19 @@ impl TGAImage {
         Ok(())
     }
 
-    pub fn fill_triangle(&mut self, color: TGAColor, final_coord: &mut [Point]) {
+    pub fn fill_triangle(&mut self, intensity:f32, final_coord: &mut [Point],text_triangle:&Triangle) {
         final_coord.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap());
-        let first_dot = &final_coord[0];
-        let last_dot = &final_coord[2];
-        let middle_dot = &final_coord[1];
+        let first_dot = final_coord[0].clone();
+        let last_dot = final_coord[2].clone();
+        let middle_dot = final_coord[1].clone();
+        let total_height=last_dot.y-first_dot.y;
 
-        let tg_last = first_dot.to_vector(last_dot);
-        let mut tg_middle = first_dot.to_vector(middle_dot);
+        //sort by x
+        final_coord.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
+        let total_width=final_coord[2].x-final_coord[0].x;
+
+        let tg_last = first_dot.to_vector(&last_dot);
+        let mut tg_middle = first_dot.to_vector(&middle_dot);
 
         let (mut tg_middle_x, mut tg_last_x) = (tg_middle.k_of_axis(0, 1), tg_last.k_of_axis(0, 1));
         let (mut tg_middle_z, mut tg_last_z) = (tg_middle.k_of_axis(2, 1), tg_last.k_of_axis(2, 1));
@@ -138,12 +135,12 @@ impl TGAImage {
                 on_mid_border_dx = middle_dot.x as f32;
                 on_mid_border_dz = middle_dot.z as f32;
 
-                tg_middle = middle_dot.to_vector(last_dot);
+                tg_middle = middle_dot.to_vector(&last_dot);
                 tg_middle_x = tg_middle.k_of_axis(0, 1);
                 tg_middle_z = tg_middle.k_of_axis(2, 1);
             }
 
-            let (start, end,mut dz_start,mut tg_x_z) =
+            let (mut start, end,mut dz_start,mut tg_x_z) =
                 if on_mid_border_dx > on_last_border_dx {
                     (on_last_border_dx as usize, on_mid_border_dx as usize
                      ,on_last_border_dz, on_mid_border_dz-on_last_border_dz) }
@@ -153,12 +150,15 @@ impl TGAImage {
 
             if start != end {
                 tg_x_z=tg_x_z/(end-start) as f32;
+                if start<final_coord[0].x { start=final_coord[0].x;}
                 for x_coord in start..end {
+
+                    let (k_x,k_y)=((x_coord-final_coord[0].x) as f32/total_width as f32,
+                                   (dy-first_dot.y) as f32/total_height as f32);
+                    let mut color= text_triangle.get_color(k_x,k_y);
+                   // color.add_intensity(intensity);
                     self.set_pixel_unchecked(x_coord, dy, dz_start, color);
                     dz_start += tg_x_z;
-                    if tg_x_z==0.0{
-                        println!("tg 0");
-                    }
                 }
             }
 
