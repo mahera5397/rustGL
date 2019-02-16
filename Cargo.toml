@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 imagefmt="4.0.0"
 log = "0.4.6"
+num = "0.1.25"

@@ -1,60 +1,58 @@
-use crate::plane::Point;
 use crate::plane::TGAImage;
+use std::ops::Mul;
+use std::ops::Add;
+use std::ops::Neg;
+use core::mem;
+use num::traits::NumCast;
 
-#[derive(Debug)]
-pub struct Vector(pub f32,pub f32,pub f32);
-impl Vector{
-    pub fn vector_prod(&self,vector:&Vector)->Vector{
-        Vector(self.1*vector.2-self.2*vector.1,
-               self.2*vector.0-self.0*vector.2,
-               self.0*vector.1-self.1*vector.0)
+#[derive(Debug,Copy,Clone)]
+pub struct Vector<T>{
+    pub x:T,
+    pub y:T,
+    pub z:T
+}
+
+impl<T> Vector<T> where T:Mul+Add+Neg+Copy+NumCast{
+    pub fn new(x:T,y:T,z:T)->Vector<T>{
+        Vector{x,y,z}
     }
-    pub fn normalize(mut self)->Vector{
+    pub fn vector_prod(self,vector:Vector<T>)->Vector<f32>{
+        let (vec1,vec2)=(self.to_f32(), vector.to_f32());
+        Vector::new(vec1.y*vec2.z-vec1.z*vec2.y,
+               vec1.z*vec2.x-vec1.x*vec2.z,
+               vec1.x*vec2.y-vec1.y*vec2.x)
+    }
+    pub fn normalize(&self)->Vector<f32>{
         let inv_length=1.0/self.length();
-        self.0*=inv_length;
-        self.1*=inv_length;
-        self.2*=inv_length;
-        self
+        let vec=self.to_f32();
+        Vector::new(vec.x*inv_length, vec.y*inv_length,vec.z*inv_length)
     }
-    pub fn scalar_prod(&self,vector:&Vector)->f32{
-        self.0*vector.0+self.1*vector.1+self.2*vector.2
+    pub fn scalar_prod(&self,vector:&Vector<T>)->f32{
+        let (vec1,vec2)=(self.to_f32(), vector.to_f32());
+        vec1.x*vec2.x + vec1.y *vec2.y + vec1.z * vec2.z
     }
     pub fn length(&self)->f32{
-        (self.0*self.0+self.1*self.1+self.2*self.2).sqrt()
+        let vec=self.to_f32();
+        (vec.x*vec.x+vec.y*vec.y+vec.z*vec.z).sqrt()
     }
-    pub fn k_of_axis(&self,axis1:usize,axis2:usize)->f32{
-       let mut result=match axis1 {
-           0=>self.0,
-           1=>self.1,
-           _=>self.2
-       }/ match axis2 {
-            0=>self.0,
-            1=>self.1,
-            _=>self.2
-        };
-        if result.is_infinite()||result.is_nan(){result=0.0};
-        result
+    fn to_f32(self)->Vector<f32> {
+        Vector::new(num::cast(self.x).unwrap(), num::cast(self.y).unwrap(),
+                    num::cast(self.z).unwrap() )
     }
 }
 
-#[derive(Debug)]
-pub struct DPoint {
-    pub x:f32,
-    pub y:f32,
-    pub z:f32,
+impl Mul<f32> for Vector<f32>{
+    type Output = Vector<f32>;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Vector::new(self.x*rhs,self.y*rhs,self.z*rhs)
+    }
 }
-impl DPoint {
-    pub fn new(x:f32,y:f32,z:f32)-> DPoint {
-        DPoint {x,y,z}
-    }
-    pub fn to_plane_point(&self, height:usize, width:usize) ->Point{
-        Point::new((((self.x +1.0)/2.0)*width as f32 )as usize,(((self.y +1.0)/2.0)*height as f32) as usize,
-                   (((self.z +1.0)/2.0)*height as f32) as usize)
-    }
-    pub fn to_text_point(&self,height:usize,width:usize)->Point{
-        Point::new((self.x * width as f32) as usize,(self.y*height as f32) as usize,0)
-    }
-    pub fn to_vector(&self, end_of_vector:&DPoint) ->Vector{
-        Vector(end_of_vector.x-self.x,end_of_vector.y-self.y,end_of_vector.z-self.z)
+
+impl<T> Add for Vector<T> where T:Mul+Add<Output=T>+Neg+Copy+NumCast{
+    type Output = Vector<T>;
+
+    fn add(self, rhs: Vector<T>) -> Self::Output {
+       Vector::new(self.x+rhs.x,self.y+rhs.y,self.z+rhs.z)
     }
 }

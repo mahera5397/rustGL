@@ -4,8 +4,10 @@ use imagefmt::ColType;
 use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
-use crate::texture::Triangle;
 use std::ops::Mul;
+use core::mem;
+use std::ptr::eq;
+use std::ops::Add;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -32,16 +34,16 @@ impl TGAColor{
     }
     pub fn add_intensity(&mut self,intensity:f32){
         self.red=(self.red as f32 * intensity) as u8;
-        self.red=(self.green as f32 * intensity) as u8;
-        self.red=(self.blue as f32 * intensity) as u8;
+        self.green=(self.green as f32 * intensity) as u8;
+        self.blue=(self.blue as f32 * intensity) as u8;
     }
 }
 
-pub fn line_length(start:& Point,end:& Point)->f32{
-    ((start.x as f32 -end.x as f32)*
-        (start.x as f32 -end.x as f32)+(start.y as f32 -end.y as f32 )*
-        (start.y as f32 -end.y as f32 ) ).sqrt()
-}
+//pub fn line_length(start:& Point,end:& Point)->f32{
+//    ((start.x as f32 -end.x as f32)*
+//        (start.x as f32 -end.x as f32)+(start.y as f32 -end.y as f32 )*
+//        (start.y as f32 -end.y as f32 ) ).sqrt()
+//}
 
 pub struct TGAImage{
     pub height:usize,
@@ -58,7 +60,7 @@ impl TGAImage {
         TGAImage { height, width, pixels, z_buff }
     }
 
-    pub fn set_pixel(&mut self, point: &Point, pixel: TGAColor) -> Result<(), String> {
+    pub fn set_pixel(&mut self, point: &Vector<usize>, pixel: TGAColor) -> Result<(), String> {
         if let Err(e) = self.check_boundaries(point) { return Err(e) }
         //TODO lifetime reference
         self.set_pixel_unchecked(point.x, point.y, point.z as f32, pixel);
@@ -82,7 +84,7 @@ impl TGAImage {
                         , ColFmt::RGBA, self.as_vec().as_slice(), ColType::Auto)
     }
 
-    pub fn draw_line(&mut self, start: &Point, end: &Point, color: &TGAColor) -> Result<(), String> {
+    pub fn draw_line(&mut self, start: &Vector<usize>, end: &Vector<usize>, color: &TGAColor) -> Result<(), String> {
         if let Err(e) = self.check_boundaries(start) { return Err(e) };
         if let Err(e) = self.check_boundaries(end) { return Err(e) }
 
@@ -102,73 +104,38 @@ impl TGAImage {
         Ok(())
     }
 
-    fn check_boundaries(&self, point: &Point) -> Result<(), String> {
+    fn check_boundaries(&self, point: &Vector<usize>) -> Result<(), String> {
         if self.height <= point.y || self.width <= point.x {
             return Err(String::from("out of image boundaries"))
         }
         Ok(())
     }
+/*
+    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Point],text_coord:&mut [Point]) {
+        if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
+        if dim_coord[0].y>dim_coord[1].y{mem::swap(&dim_coord[0],&dim_coord[1]);
+                                        mem::swap(&text_coord[0],&text_coord[1])}
+        if dim_coord[0].y>dim_coord[2].y{mem::swap(&dim_coord[0],&dim_coord[2]);
+                                        mem::swap(&text_coord[0],&text_coord[2])}
+        if dim_coord[1].y>dim_coord[2].y{mem::swap(&dim_coord[1],&dim_coord[2]);
+                                        mem::swap(&text_coord[1],&text_coord[2])}
 
-    pub fn fill_triangle(&mut self, intensity:f32, final_coord: &mut [Point],text_triangle:&Triangle) {
-        final_coord.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap());
-        let first_dot = final_coord[0].clone();
-        let last_dot = final_coord[2].clone();
-        let middle_dot = final_coord[1].clone();
-        let total_height=last_dot.y-first_dot.y;
+        let total_height=dim_coord[2].y-dim_coord[0].y;
+        for i in 0..total_height{
+            let second_half=i>dim_coord[1].y-dim_coord[0].y || dim_coord[1].y==dim_coord[0].y;
+            let segment_height=if second_half{dim_coord[2].y-dim_coord[1].y}
+                else {dim_coord[1].y-dim_coord[0].y};
+            let alpha=i as f32/(total_height as f32);
+            let beta=if second_half{(i -(dim_coord[1].y-dim_coord[0].y)) as f32/segment_height as f32}
+                else { i as f32/segment_height as f32 };
 
-        //sort by x
-        final_coord.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-        let total_width=final_coord[2].x-final_coord[0].x;
+            let A=dim_coord[0]+dim_coord[2].to_vector(&dim_coord[0])*alpha;
 
-        let tg_last = first_dot.to_vector(&last_dot);
-        let mut tg_middle = first_dot.to_vector(&middle_dot);
-
-        let (mut tg_middle_x, mut tg_last_x) = (tg_middle.k_of_axis(0, 1), tg_last.k_of_axis(0, 1));
-        let (mut tg_middle_z, mut tg_last_z) = (tg_middle.k_of_axis(2, 1), tg_last.k_of_axis(2, 1));
-
-
-        let (mut on_last_border_dx, mut on_last_border_dz) = (first_dot.x as f32, first_dot.z as f32);
-        let (mut on_mid_border_dx, mut on_mid_border_dz) = (first_dot.x as f32, first_dot.z as f32);
-
-        for dy in first_dot.y..last_dot.y {
-            if dy == middle_dot.y {
-                on_mid_border_dx = middle_dot.x as f32;
-                on_mid_border_dz = middle_dot.z as f32;
-
-                tg_middle = middle_dot.to_vector(&last_dot);
-                tg_middle_x = tg_middle.k_of_axis(0, 1);
-                tg_middle_z = tg_middle.k_of_axis(2, 1);
-            }
-
-            let (mut start, end,mut dz_start,mut tg_x_z) =
-                if on_mid_border_dx > on_last_border_dx {
-                    (on_last_border_dx as usize, on_mid_border_dx as usize
-                     ,on_last_border_dz, on_mid_border_dz-on_last_border_dz) }
-                else {
-                    (on_mid_border_dx as usize, on_last_border_dx as usize
-                     ,on_mid_border_dz,on_last_border_dz-on_mid_border_dz) };
-
-            if start != end {
-                tg_x_z=tg_x_z/(end-start) as f32;
-                if start<final_coord[0].x { start=final_coord[0].x;}
-                for x_coord in start..end {
-
-                    let (k_x,k_y)=((x_coord-final_coord[0].x) as f32/total_width as f32,
-                                   (dy-first_dot.y) as f32/total_height as f32);
-                    let mut color= text_triangle.get_color(k_x,k_y);
-                   // color.add_intensity(intensity);
-                    self.set_pixel_unchecked(x_coord, dy, dz_start, color);
-                    dz_start += tg_x_z;
-                }
-            }
-
-            on_mid_border_dx += tg_middle_x;
-            on_last_border_dx += tg_last_x;
-
-            on_mid_border_dz += tg_middle_z;
-            on_last_border_dz += tg_last_z;
         }
-    }
+
+
+
+    }*/
 
     pub fn flip_vertically(&mut self) {
         let mut top_half = Vec::new();
@@ -178,16 +145,16 @@ impl TGAImage {
         self.pixels.swap_with_slice(&mut top_half);
     }
 }
-
+/*
 
 #[derive(PartialEq,Debug,Clone)]
 pub struct Point{
-    pub x:usize,
-    pub y:usize,
-    pub z:usize
+    pub x:f32,
+    pub y:f32,
+    pub z:f32
 }
 impl Point{
-    pub fn new(x:usize,y:usize,z:usize)->Point{
+    pub fn new(x:f32,y:f32,z:f32)->Point{
         Point{x,y,z}
     }
     pub fn to_vector(&self,end_of_vector:&Point) ->Vector{
@@ -196,3 +163,14 @@ impl Point{
                end_of_vector.z as f32-self.z as f32)
     }
 }
+
+impl Add<Vector> for Point{
+    type Output = Vector;
+
+    fn add(self, rhs: Vector) -> Self::Output {
+        rhs.0+=self.x;
+        rhs.1+=self.y;
+        rhs.2+=self.z;
+        rhs
+    }
+}*/

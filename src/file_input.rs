@@ -1,10 +1,10 @@
 use std::fs::File;
-use crate::dimensional::DPoint;
 use std::io::BufReader;
 use std::io::BufRead;
 use crate::texture::Texture;
+use crate::dimensional::Vector;
 
-pub fn read_file(file_path:&str) ->Vec<(Vec<DPoint>, Vec<DPoint>)> {
+pub fn read_file(file_path:&str) ->Vec<(Vec<Vector<f32>>, Vec<Vector<f32>>)> {
     let res=File::open(file_path).unwrap();
     let reader=BufReader::new(res);
     let mut points=Vec::new();
@@ -50,12 +50,12 @@ pub fn read_file(file_path:&str) ->Vec<(Vec<DPoint>, Vec<DPoint>)> {
         let mut real_coord = Vec::new();
         for val in triangle.0.iter() {
             let point = *points.get(val - 1).unwrap();
-            real_coord.push(DPoint::new(point[0], point[1], point[2]));
+            real_coord.push(Vector::new(point[0], point[1], point[2]));
         }
         let mut real_text_coord=Vec::new();
         for text_val in triangle.1.iter(){
             let point = *texture_points.get(text_val - 1).unwrap();
-            real_text_coord.push(DPoint::new(point[0], point[1], point[2]))
+            real_text_coord.push(Vector::new(point[0], point[1], point[2]))
         }
 
         real_coords.push((real_coord,real_text_coord));
