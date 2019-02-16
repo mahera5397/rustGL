@@ -4,10 +4,7 @@ use imagefmt::ColType;
 use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
-use std::ops::Mul;
 use core::mem;
-use std::ptr::eq;
-use std::ops::Add;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -39,12 +36,6 @@ impl TGAColor{
     }
 }
 
-//pub fn line_length(start:& Point,end:& Point)->f32{
-//    ((start.x as f32 -end.x as f32)*
-//        (start.x as f32 -end.x as f32)+(start.y as f32 -end.y as f32 )*
-//        (start.y as f32 -end.y as f32 ) ).sqrt()
-//}
-
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,
@@ -60,18 +51,18 @@ impl TGAImage {
         TGAImage { height, width, pixels, z_buff }
     }
 
-    pub fn set_pixel(&mut self, point: &Vector<usize>, pixel: TGAColor) -> Result<(), String> {
-        if let Err(e) = self.check_boundaries(point) { return Err(e) }
+    pub fn set_pixel(&mut self, point: Vector<f32>, pixel: TGAColor) -> Result<(), String> {
+        if let Err(e) = self.check_boundaries(&point.round()) { return Err(e) }
         //TODO lifetime reference
-        self.set_pixel_unchecked(point.x, point.y, point.z as f32, pixel);
+        self.set_pixel_unchecked(&point, pixel);
         Ok(())
     }
 
-    fn set_pixel_unchecked(&mut self, x: usize, y: usize, z: f32, pixel: TGAColor) {
-        let index = y * self.width + x;
-        if self.z_buff[index] < z {
+    fn set_pixel_unchecked(&mut self, vec:&Vector<f32>, pixel: TGAColor) {
+        let index = vec.y as usize * self.width + vec.x as usize;
+        if self.z_buff[index] < vec.z {
             self.pixels[index] = pixel;
-            self.z_buff[index] = z;
+            self.z_buff[index] = vec.z;
         }
     }
 
@@ -84,25 +75,25 @@ impl TGAImage {
                         , ColFmt::RGBA, self.as_vec().as_slice(), ColType::Auto)
     }
 
-    pub fn draw_line(&mut self, start: &Vector<usize>, end: &Vector<usize>, color: &TGAColor) -> Result<(), String> {
-        if let Err(e) = self.check_boundaries(start) { return Err(e) };
-        if let Err(e) = self.check_boundaries(end) { return Err(e) }
-
-        let (miny, maxy) = if start.y > end.y { (end.y, start.y) } else { (start.y, end.y) };
-        let (minx, maxx) = if start.x > end.x { (end.x, start.x) } else { (start.x, end.x) };
-
-        let x_is_greater = maxx - minx > maxy - miny;
-
-        let (min, max) = if x_is_greater { (minx, maxx) } else { (miny, maxy) };
-
-        for t in min..max {
-            let float: f32 = (t - min) as f32 / (max - min) as f32;
-            let x: usize = ((start.x as f32) * (1.0 - float) + (end.x as f32) * float) as usize;
-            let y: usize = ((start.y as f32) * (1.0 - float) + (end.y as f32) * float) as usize;
-            self.set_pixel_unchecked(x, y, f32::MAX, color.clone());
-        }
-        Ok(())
-    }
+//    pub fn draw_line(&mut self, start: &Vector<usize>, end: &Vector<usize>, color: &TGAColor) -> Result<(), String> {
+//        if let Err(e) = self.check_boundaries(start) { return Err(e) };
+//        if let Err(e) = self.check_boundaries(end) { return Err(e) }
+//
+//        let (miny, maxy) = if start.y > end.y { (end.y, start.y) } else { (start.y, end.y) };
+//        let (minx, maxx) = if start.x > end.x { (end.x, start.x) } else { (start.x, end.x) };
+//
+//        let x_is_greater = maxx - minx > maxy - miny;
+//
+//        let (min, max) = if x_is_greater { (minx, maxx) } else { (miny, maxy) };
+//
+//        for t in min..max {
+//            let float: f32 = (t - min) as f32 / (max - min) as f32;
+//            let x: usize = ((start.x as f32) * (1.0 - float) + (end.x as f32) * float) as usize;
+//            let y: usize = ((start.y as f32) * (1.0 - float) + (end.y as f32) * float) as usize;
+//            self.set_pixel_unchecked(x, y, f32::MAX, color.clone());
+//        }
+//        Ok(())
+//    }
 
     fn check_boundaries(&self, point: &Vector<usize>) -> Result<(), String> {
         if self.height <= point.y || self.width <= point.x {
@@ -110,15 +101,14 @@ impl TGAImage {
         }
         Ok(())
     }
-/*
-    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Point],text_coord:&mut [Point]) {
+
+    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Vector<isize>],text_coord:&mut [Vector<isize>]
+    ,texture:&Texture) {
         if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
-        if dim_coord[0].y>dim_coord[1].y{mem::swap(&dim_coord[0],&dim_coord[1]);
-                                        mem::swap(&text_coord[0],&text_coord[1])}
-        if dim_coord[0].y>dim_coord[2].y{mem::swap(&dim_coord[0],&dim_coord[2]);
-                                        mem::swap(&text_coord[0],&text_coord[2])}
-        if dim_coord[1].y>dim_coord[2].y{mem::swap(&dim_coord[1],&dim_coord[2]);
-                                        mem::swap(&text_coord[1],&text_coord[2])}
+
+        if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); }
+        if dim_coord[0].y>dim_coord[2].y{dim_coord.swap(0,2); text_coord.swap(0,2); }
+        if dim_coord[1].y>dim_coord[2].y{dim_coord.swap(1,2); text_coord.swap(1,2); }
 
         let total_height=dim_coord[2].y-dim_coord[0].y;
         for i in 0..total_height{
@@ -129,13 +119,29 @@ impl TGAImage {
             let beta=if second_half{(i -(dim_coord[1].y-dim_coord[0].y)) as f32/segment_height as f32}
                 else { i as f32/segment_height as f32 };
 
-            let A=dim_coord[0]+dim_coord[2].to_vector(&dim_coord[0])*alpha;
+            let mut A=dim_coord[0].to_f32()+(dim_coord[2]-dim_coord[0])*alpha;
+            let mut B=if second_half{dim_coord[1].to_f32()+(dim_coord[2]-dim_coord[1])*beta}
+                else{dim_coord[0].to_f32()+(dim_coord[1]-dim_coord[0])*beta};
+            let mut uvA=text_coord[0].to_f32()+(text_coord[2]-text_coord[0])*alpha;
+            let mut uvB=if second_half{text_coord[1].to_f32()+(text_coord[2]-text_coord[1])*beta}
+                else { text_coord[0].to_f32()+(text_coord[1]-text_coord[0])*beta };
+            if A.x>B.x {mem::swap(&mut A,&mut B); mem::swap(&mut uvA,&mut uvB)}
 
+            for j in A.x as usize..B.x as usize{
+                let phi=if A.x==B.x{1.}
+                    else{(j-A.x as usize) as f32/(B.x-A.x)};
+                let P=A+(B-A)*phi;
+                let uvP=uvA+(uvB-uvA)*phi;
+                let pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
+                //println!("{:?}",uvP);
+                self.set_pixel_unchecked(&P,pixel);
+
+            }
         }
 
 
 
-    }*/
+    }
 
     pub fn flip_vertically(&mut self) {
         let mut top_half = Vec::new();
@@ -145,32 +151,3 @@ impl TGAImage {
         self.pixels.swap_with_slice(&mut top_half);
     }
 }
-/*
-
-#[derive(PartialEq,Debug,Clone)]
-pub struct Point{
-    pub x:f32,
-    pub y:f32,
-    pub z:f32
-}
-impl Point{
-    pub fn new(x:f32,y:f32,z:f32)->Point{
-        Point{x,y,z}
-    }
-    pub fn to_vector(&self,end_of_vector:&Point) ->Vector{
-        Vector(end_of_vector.x as f32-self.x as f32,
-               end_of_vector.y as f32-self.y as f32,
-               end_of_vector.z as f32-self.z as f32)
-    }
-}
-
-impl Add<Vector> for Point{
-    type Output = Vector;
-
-    fn add(self, rhs: Vector) -> Self::Output {
-        rhs.0+=self.x;
-        rhs.1+=self.y;
-        rhs.2+=self.z;
-        rhs
-    }
-}*/

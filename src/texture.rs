@@ -1,6 +1,4 @@
 use crate::plane::TGAColor;
-use crate::dimensional::Vector;
-use core::mem;
 
 pub struct Texture{
     pub height:usize,
