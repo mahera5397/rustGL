@@ -4,10 +4,6 @@ use imagefmt::ColType;
 use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
-use std::ops::Mul;
-use core::mem;
-use std::ptr::eq;
-use std::ops::Add;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -39,12 +35,6 @@ impl TGAColor{
     }
 }
 
-//pub fn line_length(start:& Point,end:& Point)->f32{
-//    ((start.x as f32 -end.x as f32)*
-//        (start.x as f32 -end.x as f32)+(start.y as f32 -end.y as f32 )*
-//        (start.y as f32 -end.y as f32 ) ).sqrt()
-//}
-
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,
@@ -60,18 +50,18 @@ impl TGAImage {
         TGAImage { height, width, pixels, z_buff }
     }
 
-    pub fn set_pixel(&mut self, point: &Vector<usize>, pixel: TGAColor) -> Result<(), String> {
-        if let Err(e) = self.check_boundaries(point) { return Err(e) }
+    pub fn set_pixel(&mut self, point: Vector<f32>, pixel: TGAColor) -> Result<(), String> {
+        if let Err(e) = self.check_boundaries(&point.round()) { return Err(e) }
         //TODO lifetime reference
-        self.set_pixel_unchecked(point.x, point.y, point.z as f32, pixel);
+        self.set_pixel_unchecked(&point, pixel);
         Ok(())
     }
 
-    fn set_pixel_unchecked(&mut self, x: usize, y: usize, z: f32, pixel: TGAColor) {
-        let index = y * self.width + x;
-        if self.z_buff[index] < z {
+    fn set_pixel_unchecked(&mut self, vec:&Vector<f32>, pixel: TGAColor) {
+        let index = vec.y as usize * self.width + vec.x as usize;
+        if self.z_buff[index] < vec.z {
             self.pixels[index] = pixel;
-            self.z_buff[index] = z;
+            self.z_buff[index] = vec.z;
         }
     }
 
@@ -99,7 +89,7 @@ impl TGAImage {
             let float: f32 = (t - min) as f32 / (max - min) as f32;
             let x: usize = ((start.x as f32) * (1.0 - float) + (end.x as f32) * float) as usize;
             let y: usize = ((start.y as f32) * (1.0 - float) + (end.y as f32) * float) as usize;
-            self.set_pixel_unchecked(x, y, f32::MAX, color.clone());
+            self.set_pixel_unchecked(&Vector::new(x as f32,y as f32,f32::MAX), color.clone());
         }
         Ok(())
     }
@@ -110,32 +100,49 @@ impl TGAImage {
         }
         Ok(())
     }
-/*
-    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Point],text_coord:&mut [Point]) {
+
+    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
+    ,texture:&Texture) {
         if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
-        if dim_coord[0].y>dim_coord[1].y{mem::swap(&dim_coord[0],&dim_coord[1]);
-                                        mem::swap(&text_coord[0],&text_coord[1])}
-        if dim_coord[0].y>dim_coord[2].y{mem::swap(&dim_coord[0],&dim_coord[2]);
-                                        mem::swap(&text_coord[0],&text_coord[2])}
-        if dim_coord[1].y>dim_coord[2].y{mem::swap(&dim_coord[1],&dim_coord[2]);
-                                        mem::swap(&text_coord[1],&text_coord[2])}
 
-        let total_height=dim_coord[2].y-dim_coord[0].y;
-        for i in 0..total_height{
-            let second_half=i>dim_coord[1].y-dim_coord[0].y || dim_coord[1].y==dim_coord[0].y;
-            let segment_height=if second_half{dim_coord[2].y-dim_coord[1].y}
-                else {dim_coord[1].y-dim_coord[0].y};
-            let alpha=i as f32/(total_height as f32);
-            let beta=if second_half{(i -(dim_coord[1].y-dim_coord[0].y)) as f32/segment_height as f32}
-                else { i as f32/segment_height as f32 };
+        if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); }
+        if dim_coord[0].y>dim_coord[2].y{dim_coord.swap(0,2); text_coord.swap(0,2); }
+        if dim_coord[1].y>dim_coord[2].y{dim_coord.swap(1,2); text_coord.swap(1,2); }
 
-            let A=dim_coord[0]+dim_coord[2].to_vector(&dim_coord[0])*alpha;
+        let (mut uvA,mut uvB)=(text_coord[0],text_coord[0]);
+        let (mut A,mut B)=(dim_coord[0],dim_coord[0]);
 
+        let tg1=(text_coord[2]-text_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
+        let mut tg2=(text_coord[1]-text_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
+        let tg_last=(dim_coord[2]-dim_coord[0])/(dim_coord[2].y-dim_coord[0].y);
+        let mut tg_middle=(dim_coord[1]-dim_coord[0])/(dim_coord[1].y-dim_coord[0].y);
+
+        for dy in dim_coord[0].y as usize..dim_coord[2].y as usize{
+            if dim_coord[1].y as usize==dy{
+                uvB=text_coord[1];
+                tg2=(text_coord[2]-text_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
+                B=dim_coord[1];
+                tg_middle=(dim_coord[2]-dim_coord[1])/(dim_coord[2].y-dim_coord[1].y);
+            }
+
+            let (start,end)=if A.x<B.x{(A,B)}
+                else{ (B,A)};
+
+            for dx in start.x as usize..end.x as usize{
+                let mut phi=(dx as f32-A.x)/(B.x-A.x);
+                if phi>1.{phi=1.};
+                if phi<0.{phi=0.};
+                let P=A+(B-A)*phi;
+                let uvP=uvA+(uvB-uvA)*phi;
+                let pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
+                self.set_pixel_unchecked(&P,pixel);
+            }
+            uvA=uvA+tg1;
+            uvB=uvB+tg2;
+            A=A+tg_last;
+            B=B+tg_middle;
         }
-
-
-
-    }*/
+    }
 
     pub fn flip_vertically(&mut self) {
         let mut top_half = Vec::new();
@@ -145,32 +152,3 @@ impl TGAImage {
         self.pixels.swap_with_slice(&mut top_half);
     }
 }
-/*
-
-#[derive(PartialEq,Debug,Clone)]
-pub struct Point{
-    pub x:f32,
-    pub y:f32,
-    pub z:f32
-}
-impl Point{
-    pub fn new(x:f32,y:f32,z:f32)->Point{
-        Point{x,y,z}
-    }
-    pub fn to_vector(&self,end_of_vector:&Point) ->Vector{
-        Vector(end_of_vector.x as f32-self.x as f32,
-               end_of_vector.y as f32-self.y as f32,
-               end_of_vector.z as f32-self.z as f32)
-    }
-}
-
-impl Add<Vector> for Point{
-    type Output = Vector;
-
-    fn add(self, rhs: Vector) -> Self::Output {
-        rhs.0+=self.x;
-        rhs.1+=self.y;
-        rhs.2+=self.z;
-        rhs
-    }
-}*/
