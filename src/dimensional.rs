@@ -5,6 +5,7 @@ use std::ops::Sub;
 use std::ops::Div;
 use std::ops::AddAssign;
 use std::ops::SubAssign;
+use crate::matrix::Matrix;
 
 #[derive(Debug,Copy,Clone)]
 pub struct Vector<T>{
@@ -46,6 +47,23 @@ impl<T> Vector<T> where T:NumCast+Copy{
         let vec=self.to_f32();
         Vector::new((vec.x+1.)/2. * width as f32, (vec.y+1.)/2. * height as f32,(vec.z+1.)/2. * width as f32)
     }
+    pub fn get(&self,index:usize)->T{
+        match index {
+            0=>self.x,
+            1=>self.y,
+            _=>self.z
+        }
+    }
+    pub fn set(&mut self,index:usize,val:T){
+        match index {
+            0=>self.x=val,
+            1=>self.y=val,
+            _=>self.z=val
+        }
+    }
+    pub fn to_matrix(&self)->Matrix{
+        Matrix::from_vector(&self.to_f32())
+    }
 }
 
 impl Mul<f32> for Vector<f32>{
@@ -82,5 +100,11 @@ impl Div<f32> for Vector<f32>{
         if rhs==0. {return Vector::new(0.,0.,0.)};
         self.x/=rhs; self.y/=rhs; self.z/=rhs;
         self
+    }
+}
+
+impl Default for Vector<f32>{
+    fn default() -> Self {
+        Vector::new(0.,0.,0.)
     }
 }

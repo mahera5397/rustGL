@@ -4,6 +4,7 @@ use imagefmt::ColType;
 use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
+use num::NumCast;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -51,7 +52,7 @@ impl TGAImage {
     }
 
     pub fn set_pixel(&mut self, point: Vector<f32>, pixel: TGAColor) -> Result<(), String> {
-        if let Err(e) = self.check_boundaries(&point.round()) { return Err(e) }
+        if let Err(e) = self.check_boundaries(&point) { return Err(e) }
         //TODO lifetime reference
         self.set_pixel_unchecked(&point, pixel);
         Ok(())
@@ -94,8 +95,17 @@ impl TGAImage {
         Ok(())
     }
 
-    fn check_boundaries(&self, point: &Vector<usize>) -> Result<(), String> {
-        if self.height <= point.y || self.width <= point.x {
+    fn check_boundaries<T:NumCast>(&self, point: &Vector<T>) -> Result<(), String>  {
+        let (x,y) =(point.x.to_usize(),point.y.to_usize());
+        let x =match x {
+            Some(x)=>x,
+            None=> return Err(String::from("out of image boundaries"))
+        };
+        let y=match y {
+            Some(x)=>x,
+            None=> return Err(String::from("out of image boundaries"))
+        };
+        if self.height <= y || self.width <= x {
             return Err(String::from("out of image boundaries"))
         }
         Ok(())
@@ -135,7 +145,7 @@ impl TGAImage {
                 let P=A+(B-A)*phi;
                 let uvP=uvA+(uvB-uvA)*phi;
                 let pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
-                self.set_pixel_unchecked(&P,pixel);
+                self.set_pixel(P,pixel);
             }
             uvA=uvA+tg1;
             uvB=uvB+tg2;
