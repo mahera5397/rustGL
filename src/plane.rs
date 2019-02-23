@@ -5,6 +5,7 @@ use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
 use num::NumCast;
+use std::ops::Sub;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -29,10 +30,14 @@ impl TGAColor{
         }
         respond
     }
-    pub fn add_intensity(&mut self,intensity:f32){
+    pub fn add_intensity(&mut self,mut intensity:f32){
+        intensity=intensity.abs();
         self.red=(self.red as f32 * intensity) as u8;
         self.green=(self.green as f32 * intensity) as u8;
         self.blue=(self.blue as f32 * intensity) as u8;
+    }
+    pub fn to_vector(&self)->Vector<f32>{
+        Vector::new(self.red as f32/127.5-1.,self.green as f32/127.5-1.,(self.blue as f32-128.)/127.*(-1.))
     }
 }
 
@@ -111,26 +116,32 @@ impl TGAImage {
         Ok(())
     }
 
-    pub fn fill_triangle(&mut self, intensity:f32, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
-    ,texture:&Texture) {
+    pub fn fill_triangle(&mut self, light:&Vector<f32>, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
+    ,texture:&Texture,norm_coord:&mut [Vector<f32>]
+                         ,norm_map:&Texture) {
         if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
 
-        if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); }
-        if dim_coord[0].y>dim_coord[2].y{dim_coord.swap(0,2); text_coord.swap(0,2); }
-        if dim_coord[1].y>dim_coord[2].y{dim_coord.swap(1,2); text_coord.swap(1,2); }
+        if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); norm_coord.swap(0,1);}
+        if dim_coord[0].y>dim_coord[2].y{dim_coord.swap(0,2); text_coord.swap(0,2); norm_coord.swap(0,2);}
+        if dim_coord[1].y>dim_coord[2].y{dim_coord.swap(1,2); text_coord.swap(1,2); norm_coord.swap(1,2);}
 
         let (mut uvA,mut uvB)=(text_coord[0],text_coord[0]);
         let (mut A,mut B)=(dim_coord[0],dim_coord[0]);
+        let (mut unA,mut unB)=(norm_coord[0],norm_coord[0]);
 
-        let tg1=(text_coord[2]-text_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
-        let mut tg2=(text_coord[1]-text_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
+        let tg1_text=(text_coord[2]-text_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
+        let mut tg2_text=(text_coord[1]-text_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
+        let tg1_norm=(norm_coord[2]-norm_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
+        let mut tg2_norm=(norm_coord[1]-norm_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
         let tg_last=(dim_coord[2]-dim_coord[0])/(dim_coord[2].y-dim_coord[0].y);
         let mut tg_middle=(dim_coord[1]-dim_coord[0])/(dim_coord[1].y-dim_coord[0].y);
 
         for dy in dim_coord[0].y as usize..dim_coord[2].y as usize{
             if dim_coord[1].y as usize==dy{
                 uvB=text_coord[1];
-                tg2=(text_coord[2]-text_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
+                tg2_text=(text_coord[2]-text_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
+                unB=norm_coord[1];
+                tg2_norm=(norm_coord[2]-norm_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
                 B=dim_coord[1];
                 tg_middle=(dim_coord[2]-dim_coord[1])/(dim_coord[2].y-dim_coord[1].y);
             }
@@ -144,11 +155,18 @@ impl TGAImage {
                 if phi<0.{phi=0.};
                 let P=A+(B-A)*phi;
                 let uvP=uvA+(uvB-uvA)*phi;
-                let pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
+                let unP=unA+(unB-unA)*phi;
+                let mut pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
+                let norm_pixel=norm_map.get_pixel(unP.x as usize,unP.y as usize).to_vector().normalize();
+                let intensity=norm_pixel.scalar_prod(light)*1.5;
+//                println!("intensity {}",intensity);
+                pixel.add_intensity(intensity);
                 self.set_pixel(P,pixel);
             }
-            uvA=uvA+tg1;
-            uvB=uvB+tg2;
+            unA=unA+tg1_norm;
+            unB=unB+tg2_norm;
+            uvA=uvA+tg1_text;
+            uvB=uvB+tg2_text;
             A=A+tg_last;
             B=B+tg_middle;
         }

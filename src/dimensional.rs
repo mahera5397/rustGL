@@ -6,6 +6,7 @@ use std::ops::Div;
 use std::ops::AddAssign;
 use std::ops::SubAssign;
 use crate::matrix::Matrix;
+use std::ops::Index;
 
 #[derive(Debug,Copy,Clone)]
 pub struct Vector<T>{
@@ -46,13 +47,6 @@ impl<T> Vector<T> where T:NumCast+Copy{
     pub fn to_plane(&self,height:usize,width:usize)->Vector<f32>{
         let vec=self.to_f32();
         Vector::new((vec.x+1.)/2. * width as f32, (vec.y+1.)/2. * height as f32,(vec.z+1.)/2. * width as f32)
-    }
-    pub fn get(&self,index:usize)->T{
-        match index {
-            0=>self.x,
-            1=>self.y,
-            _=>self.z
-        }
     }
     pub fn set(&mut self,index:usize,val:T){
         match index {
@@ -103,8 +97,14 @@ impl Div<f32> for Vector<f32>{
     }
 }
 
-impl Default for Vector<f32>{
-    fn default() -> Self {
-        Vector::new(0.,0.,0.)
+impl<T> Index<usize> for Vector<T> where T:Copy{
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index{
+            0=>&self.x,
+            1=>&self.y,
+            _=>&self.z
+        }
     }
 }
