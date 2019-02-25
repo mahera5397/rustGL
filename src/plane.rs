@@ -30,17 +30,20 @@ impl TGAColor{
         }
         respond
     }
-    pub fn add_intensity(&mut self,mut intensity:f32){
-        intensity=intensity.abs();
-        self.red=(self.red as f32 * intensity) as u8;
-        self.green=(self.green as f32 * intensity) as u8;
-        self.blue=(self.blue as f32 * intensity) as u8;
+    pub fn add_intensity(&mut self,intensity:f32) {
+        if intensity < 0.0 {self.red=0; self.green=0; self.blue=0;}
+        else {
+            self.red = (self.red as f32 * intensity) as u8;
+            self.green = (self.green as f32 * intensity) as u8;
+            self.blue = (self.blue as f32 * intensity) as u8;
+        }
     }
     pub fn to_vector(&self)->Vector<f32>{
         Vector::new(self.red as f32/127.5-1.,self.green as f32/127.5-1.,(self.blue as f32-128.)/127.*(-1.))
     }
 }
 
+#[derive(Clone)]
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,

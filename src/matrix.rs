@@ -4,6 +4,7 @@ use std::ops::Index;
 use std::ops::Div;
 use std::ops::IndexMut;
 
+#[derive(Clone)]
 pub struct Matrix{
     pub matrix:Vec<Vec<f32>>,
     rows:usize,
@@ -23,7 +24,7 @@ impl Matrix{
         Matrix{matrix, rows,col}
     }
 
-    pub fn multiply(&self,other:&Matrix)->Matrix{
+    pub fn multiply(&self,other:& Matrix)->Matrix{
         assert_eq!(self.col,other.rows);
         let mut respond=Matrix::new(self.rows, other.col);
         for i in 0..self.rows {
