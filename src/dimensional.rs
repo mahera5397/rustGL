@@ -46,6 +46,7 @@ impl<T> Vector<T> where T:NumCast+Copy{
     }
     pub fn to_plane(&self,height:usize,width:usize)->Vector<f32>{
         let vec=self.to_f32();
+//        println!("before {:?}",vec);
         Vector::new((vec.x+1.)/2. * width as f32, (vec.y+1.)/2. * height as f32,(vec.z+1.)/2. * width as f32)
     }
     pub fn set(&mut self,index:usize,val:T){

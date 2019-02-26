@@ -120,8 +120,9 @@ impl TGAImage {
     }
 
     pub fn fill_triangle(&mut self, light:&Vector<f32>, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
-    ,texture:&Texture,norm_coord:&mut [Vector<f32>]
-                         ,norm_map:&Texture) {
+    ,texture:&Texture,norm_coord:&mut [Vector<f32>],norm_map:&Texture) {
+//        println!("drawing triangle {:?}",dim_coord);
+
         if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
 
         if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); norm_coord.swap(0,1);}
@@ -159,6 +160,7 @@ impl TGAImage {
                 let P=A+(B-A)*phi;
                 let uvP=uvA+(uvB-uvA)*phi;
                 let unP=unA+(unB-unA)*phi;
+//                println!("x {}, y{}",uvP.x as usize,uvP.y);
                 let mut pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
                 let norm_pixel=norm_map.get_pixel(unP.x as usize,unP.y as usize).to_vector().normalize();
                 let intensity=norm_pixel.scalar_prod(light)*1.5;

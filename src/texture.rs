@@ -12,6 +12,7 @@ impl Texture{
     }
     pub fn get_pixel(&self,x:usize,y:usize)->TGAColor{
         let index=y*self.width+x;
+//        if index>self.width*self.height-1{ return  TGAColor::new(0,0,0,0)}
         let vec=self.arr.iter()
             .skip(index*4)
             .take(4)

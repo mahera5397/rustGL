@@ -120,7 +120,7 @@ pub struct Scene<'a>{
 
 impl <'a> Scene<'a>{
     pub fn new(height:usize,width:usize,light:Vector<f32>)->Scene<'a>{
-        let eye=Vector::new(1.,1.,3.);
+        let eye=Vector::new(-1.,-1.,3.);
         let mut projection=Matrix::ident(4);
         projection[3][2]=-1./eye.z;
         let up=Vector::new(0.,1.,0.);
