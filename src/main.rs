@@ -3,6 +3,8 @@ use simpleOpenGL::file_input::read_texture_file;
 use simpleOpenGL::plane::TGAColor;
 use simpleOpenGL::obj::Scene;
 use simpleOpenGL::obj::Object;
+use std::rc::Rc;
+use std::sync::Arc;
 
 const FILE_OUTPUT_PATH:&str="image.tga";
 
@@ -22,17 +24,17 @@ const FLOOR_OBJ_PATH:&str="floor.obj";
 const FLOOR_TEXTURE_PATH:&str="floor_diff.tga";
 const FLOOR_NORMAL_PATH:&str="floor_nm.tga";
 
-const SIZE:usize=2000;
+const SIZE:usize=5000;
 
 fn main(){
-    let head_texture=read_texture_file(HEAD_TEXTURE_PATH);
-    let head_nm=read_texture_file(HEAD_NORMAL_PATH);
-    let eye_texture=read_texture_file(EYE_TEXTURE_PATH);
-    let eye_nm=read_texture_file(EYE_NORMAL_PATH);
-    let eye_outer_texture=read_texture_file(EYE_OUTER_TEXTURE_PATH);
-    let eye_outer_nm=read_texture_file(EYE_OUTER_NORMAL_PATH);
-    let floor_texture=read_texture_file(FLOOR_TEXTURE_PATH);
-    let floor_nm=read_texture_file(FLOOR_NORMAL_PATH);
+    let head_texture=Arc::new(read_texture_file(HEAD_TEXTURE_PATH));
+    let head_nm=Arc::new(read_texture_file(HEAD_NORMAL_PATH));
+    let eye_texture=Arc::new(read_texture_file(EYE_TEXTURE_PATH));
+    let eye_nm=Arc::new(read_texture_file(EYE_NORMAL_PATH));
+    let eye_outer_texture=Arc::new(read_texture_file(EYE_OUTER_TEXTURE_PATH));
+    let eye_outer_nm=Arc::new(read_texture_file(EYE_OUTER_NORMAL_PATH));
+    let floor_texture=Arc::new(read_texture_file(FLOOR_TEXTURE_PATH));
+    let floor_nm=Arc::new(read_texture_file(FLOOR_NORMAL_PATH));
 
     let LIGHT_DIR=Vector::new(0.0,0.0,-1.0).normalize();
     let mut scene = Scene::new(SIZE, SIZE, LIGHT_DIR);
@@ -40,10 +42,10 @@ fn main(){
     let position=Vector::new(0.,0.,0.);
         //.normalize();
 
-    let mut head=Object::new(HEAD_OBJ_PATH,&head_texture,&head_nm,position);
-    let mut eyes =Object::new(EYE_OBJ_PATH,&eye_texture,&eye_nm,position);
-    let mut eyes_outer =Object::new(EYE_OUTER_OBJ_PATH,&eye_outer_texture,&eye_outer_nm,position);
-    let floor =Object::new(FLOOR_OBJ_PATH,&floor_texture,&floor_nm,position);
+    let mut head=Object::new(HEAD_OBJ_PATH,head_texture,head_nm,position);
+    let mut eyes =Object::new(EYE_OBJ_PATH,eye_texture,eye_nm,position);
+    let mut eyes_outer =Object::new(EYE_OUTER_OBJ_PATH,eye_outer_texture,eye_outer_nm,position);
+    let floor =Object::new(FLOOR_OBJ_PATH,floor_texture,floor_nm,position);
 
     head.rotate_x(20.)
         .rotate_y(20.)

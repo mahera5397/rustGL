@@ -5,7 +5,8 @@ use std::f32;
 use crate::dimensional::Vector;
 use crate::texture::Texture;
 use num::NumCast;
-use std::ops::Sub;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Copy, Clone)]
 pub struct TGAColor{
@@ -43,39 +44,41 @@ impl TGAColor{
     }
 }
 
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,
-    pixels:Vec<TGAColor>,
-    z_buff:Vec<f32>
+    pixels:Mutex<Vec<TGAColor>>,
+    z_buff:Mutex<Vec<f32>>
 }
 
 
 impl TGAImage {
     pub fn new(height: usize, width: usize) -> TGAImage {
-        let pixels = vec![TGAColor::new(255, 255, 255, 255); height * width];
-        let z_buff = vec![f32::MIN; height * width];
+        let pixels =Mutex::new( vec![TGAColor::new(255, 255, 255, 255); height * width]);
+        let z_buff = Mutex::new(vec![f32::MIN; height * width]);
         TGAImage { height, width, pixels, z_buff }
     }
 
-    pub fn set_pixel(&mut self, point: Vector<f32>, pixel: TGAColor) -> Result<(), String> {
+    pub fn set_pixel(&self, point: Vector<f32>, pixel: TGAColor) -> Result<(), String> {
         if let Err(e) = self.check_boundaries(&point) { return Err(e) }
         //TODO lifetime reference
         self.set_pixel_unchecked(&point, pixel);
         Ok(())
     }
 
-    fn set_pixel_unchecked(&mut self, vec:&Vector<f32>, pixel: TGAColor) {
+    fn set_pixel_unchecked(&self, vec:&Vector<f32>, pixel: TGAColor) {
         let index = vec.y as usize * self.width + vec.x as usize;
-        if self.z_buff[index] < vec.z {
-            self.pixels[index] = pixel;
-            self.z_buff[index] = vec.z;
+        let mut z_buff=self.z_buff.lock().unwrap();
+        let mut pixels=self.pixels.lock().unwrap();
+        if z_buff[index] < vec.z {
+            pixels[index] = pixel;
+            z_buff[index] = vec.z;
         }
     }
 
     fn as_vec(&self) -> Vec<u8> {
-        TGAColor::from_arr_to_arr(self.pixels.as_slice())
+        TGAColor::from_arr_to_arr(self.pixels.lock().unwrap().as_slice())
     }
 
     pub fn write_tga_file(&self, path: &str) -> Result<(), Error> {
@@ -119,8 +122,8 @@ impl TGAImage {
         Ok(())
     }
 
-    pub fn fill_triangle(&mut self, light:&Vector<f32>, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
-    ,texture:&Texture,norm_coord:&mut [Vector<f32>],norm_map:&Texture) {
+    pub fn fill_triangle(&self, light:&Vector<f32>, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
+    ,texture:&Arc<Texture>,norm_coord:&mut [Vector<f32>],norm_map:&Arc<Texture>) {
 //        println!("drawing triangle {:?}",dim_coord);
 
         if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
@@ -179,9 +182,10 @@ impl TGAImage {
 
     pub fn flip_vertically(&mut self) {
         let mut top_half = Vec::new();
+        let mut pixels=self.pixels.lock().unwrap();
         for y in 0..self.height {
-            top_half.append(&mut self.pixels[self.width * (self.height - y - 1)..self.width * (self.height - y)].to_vec())
+            top_half.append(&mut pixels[self.width * (self.height - y - 1)..self.width * (self.height - y)].to_vec())
         }
-        self.pixels.swap_with_slice(&mut top_half);
+        pixels.swap_with_slice(&mut top_half);
     }
 }

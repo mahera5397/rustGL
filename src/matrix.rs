@@ -1,7 +1,5 @@
 use crate::dimensional::Vector;
-use num::NumCast;
 use std::ops::Index;
-use std::ops::Div;
 use std::ops::IndexMut;
 
 #[derive(Clone)]

@@ -6,6 +6,9 @@ pub struct Texture{
     arr:Vec<u8>,
 }
 
+//unsafe impl Send for Texture{
+//}
+
 impl Texture{
     pub fn new(height:usize,width:usize,arr:Vec<u8>)->Texture{
         Texture{height,width,arr }

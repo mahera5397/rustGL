@@ -43,7 +43,6 @@ pub fn read_file(file_path:&str) ->Vec<(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<V
                         triangle[index]=point.parse::<usize>().unwrap();
                         let tr_point=&coords[first_slash+1..last_slash];
                         text_triangle[index]=tr_point.parse::<usize>().unwrap();
-                        let norm_point=&coords[last_slash+1..];
                         norm_triangle[index]=tr_point.parse::<usize>().unwrap();
                     }
                     triangles.push((triangle,text_triangle,norm_triangle));
