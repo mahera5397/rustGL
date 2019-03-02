@@ -3,6 +3,9 @@ use std::io::BufReader;
 use std::io::BufRead;
 use crate::texture::Texture;
 use crate::dimensional::Vector;
+use crate::colors::Colors;
+use std::io;
+use std::sync::Arc;
 
 pub fn read_file(file_path:&str) ->Vec<(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<Vector<f32>>)> {
     let res=File::open(file_path).unwrap();
@@ -73,12 +76,14 @@ pub fn read_file(file_path:&str) ->Vec<(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<V
     real_coords
 }
 
-pub fn read_texture_file(path:&str)->Texture{
-    let texture=File::open(path).unwrap();
+pub fn read_texture_file(path:&str,color_format:Colors)->Result<Arc<Texture>,io::Error>{
+    let texture=File::open(path)?;//.unwrap_or(return None);
     let mut reader=BufReader::new(texture);
-
-    let texture=imagefmt::read_from(&mut reader,imagefmt::ColFmt::RGBA).unwrap();
+    let texture=match color_format {
+        Colors::RGBA=> imagefmt::read_from(&mut reader,imagefmt::ColFmt::RGBA).unwrap(),
+        Colors::Gray=> imagefmt::read_from(&mut reader,imagefmt::ColFmt::Y).unwrap(),
+    };
     let (height,width)=(texture.h,texture.w);
     let arr=texture.buf;
-    Texture::new(height,width,arr)
+    Ok(Arc::new(Texture::new(height,width,arr,color_format)))
 }

@@ -6,6 +6,7 @@ use crate::plane::TGAImage;
 use std::thread;
 use std::sync::Arc;
 use std::fmt::Debug;
+use std::sync::Mutex;
 
 
 const MIN_ON_THREAD:usize=200;
@@ -21,50 +22,80 @@ impl Poly {
     pub fn new(tulp:(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<Vector<f32>>))-> Poly {
         Poly{coords:tulp.0,text_coords:tulp.1,norm_coords:tulp.2}
     }
-    fn draw_self(&mut self, image:& Arc<TGAImage>, light: &Vector<f32>,text_map:&Arc<Texture>, norm_map:&Arc<Texture>){
+    fn draw_self(&mut self, image:& Arc<TGAImage>, light: &Vector<f32>,
+                 text_map:&Option<Arc<Texture>>, norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>){
+
         image.fill_triangle(light,self.coords.as_mut_slice(),self.text_coords.as_mut_slice(),text_map
-                            ,self.norm_coords.as_mut_slice(),norm_map);
+                            ,self.norm_coords.as_mut_slice(),norm_map,sp_map);
     }
 }
 pub struct Object{
-    polygons:Vec<Poly>,
+    polygons:Arc<Vec<Mutex<Poly>>>,
     position:Vector<f32>,
     mod_matrix:Option<Matrix>,
-    text_map:Arc<Texture>,
-    norm_map:Arc<Texture>,
+    text_map:Option<Arc<Texture>>,
+    norm_map:Option<Arc<Texture>>,
+    sp_map:Option<Arc<Texture>>,
     pointer:usize,
+    start:usize,
+    end:usize,
 }
 
 impl Object{
-    pub fn new(file_path:&str,text_map:Arc<Texture>, norm_map:Arc<Texture>,position:Vector<f32>)->Object{
+    pub fn new(position:Vector<f32>)->Object{
+        let polygons=Arc::new(Vec::new());
+        Object{start:0,end:polygons.len(),polygons,
+            mod_matrix:None,position,text_map:None,norm_map:None,sp_map:None,pointer:0}
+    }
+
+    pub fn set_text_map(mut self,text_map:Arc<Texture>)->Self{
+        self.text_map=Some(text_map);
+        self
+    }
+    pub fn set_norm_map(mut self,norm_map:Arc<Texture>)->Self{
+        self.norm_map=Some(norm_map);
+        self
+    }
+    pub fn set_sp_map(mut self,sp_map:Arc<Texture>)->Self{
+        self.sp_map=Some(sp_map);
+        self
+    }
+    pub fn build(mut self, file_path:&str)->Self{
         let triangles=file_input::read_file(file_path);
         let mut polygons=Vec::new();
         for mut triangle in triangles{
-            triangle.1=triangle.1
-                   .iter()
-                   .map(|element| Vector::new(element.x*text_map.width as f32,
-                                              element.y*text_map.height as f32,0.))
-                   .collect::<Vec<Vector<f32>>>();
-            triangle.2=triangle.2.iter()
-                .map(|element| Vector::new(element.x*norm_map.width as f32,
-                                              element.y*norm_map.height as f32,0.))
-                   .collect::<Vec<Vector<f32>>>();
-
-            polygons.push(Poly::new(triangle))
+            if let Some(text_map)=&self.text_map{
+                triangle.1=triangle.1
+                    .iter()
+                    .map(|element| Vector::new(element.x*text_map.width as f32,
+                                               element.y*text_map.height as f32,0.))
+                    .collect::<Vec<Vector<f32>>>();
+            };
+            if let Some(norm_map)=&self.norm_map {
+                triangle.2 = triangle.2.iter()
+                    .map(|element| Vector::new(element.x * norm_map.width as f32,
+                                               element.y * norm_map.height as f32, 0.))
+                    .collect::<Vec<Vector<f32>>>();
+            };
+            let poly = Poly::new(triangle);
+            polygons.push(Mutex::new(poly));
         }
-
-        Object{polygons,mod_matrix:None,position,text_map,norm_map,pointer:0}
+        self.end=polygons.len();
+        self.polygons=Arc::new(polygons);
+        self
     }
 
     fn from_obj(&self,first:usize,last:usize)->Object{
-        let polygons=self.polygons[first..last].to_vec();
-        Object{polygons,  mod_matrix:self.mod_matrix.clone()
-            ,position:self.position,    text_map:Arc::clone(&self.text_map)
-            ,norm_map:Arc::clone(&self.norm_map),pointer:0}
+        let polygons=self.polygons.clone();
+
+        Object{start:first,end:last,polygons,  mod_matrix:self.mod_matrix.clone()
+            ,position:self.position,    text_map:self.text_map.clone()
+            ,norm_map:self.norm_map.clone(),sp_map:self.sp_map.clone(),pointer:0}
     }
 
-    fn draw_self(&mut self,image:Arc<TGAImage>,light: Vector<f32>,sight: Vector<f32>) {
-        for poly in &mut self.polygons {
+    fn draw_self(&self,image:Arc<TGAImage>,light: Vector<f32>,sight: Vector<f32>) {
+        for index in self.start..self.end{
+            let mut poly=self.polygons[index].lock().unwrap();
             let vec0 = poly.coords[0] - poly.coords[1];
             let vec1 = poly.coords[0] - poly.coords[2];
 
@@ -72,7 +103,7 @@ impl Object{
                 .normalize();
             let intensity = triangle_normal.scalar_prod(&sight);
             if intensity > 0.0 {
-                poly.draw_self(&image, &light, &self.text_map, &self.norm_map);
+                poly.draw_self(&image, &light, &self.text_map, &self.norm_map,&self.sp_map);
             }
         }
     }
@@ -188,8 +219,9 @@ impl Scene{
                 mod_matrix=mod_matrix.multiply(mat);
             }
 
-            for poly in &mut obj.polygons{
-                for point in poly.coords.iter_mut(){
+            for poly in obj.polygons.as_slice(){
+                let mut poly=poly.lock().unwrap();
+                for point in poly.coords.as_mut_slice(){
                     *point=mod_matrix.multiply(&point.to_matrix())
                         .to_vector()
                         .to_plane(self.image.height,self.image.width);
@@ -239,8 +271,7 @@ impl Scene{
         for handle in handles{
             handle.join().unwrap();
         }
-        //let image=*self.image.as_ref();
-        //self.image.to_owned().flip_vertically();
+        self.image.flip_vertically();
         self.image.write_tga_file(FILE_OUTPUT_PATH);
         &self.image //.clone()
     }

@@ -7,44 +7,9 @@ use crate::texture::Texture;
 use num::NumCast;
 use std::sync::Arc;
 use std::sync::Mutex;
+use crate::colors::TGAColor;
 
-#[derive(Copy, Clone)]
-pub struct TGAColor{
-    red:u8,
-    green:u8,
-    blue:u8,
-    alpha:u8
-}
-impl TGAColor{
-    pub fn new(red:u8,green:u8,blue:u8,alpha:u8)->TGAColor{
-        TGAColor{red,green,blue,alpha}
-    }
-    fn to_array(&self)->[u8;4]{
-        [self.red,self.green,self.blue,self.alpha]
-    }
-    fn from_arr_to_arr(array:&[TGAColor])->Vec<u8>{
-        let mut respond=Vec::new();
-        for tga in array.iter(){
-            for val in &tga.to_array(){
-                respond.push(*val);
-            }
-        }
-        respond
-    }
-    pub fn add_intensity(&mut self,intensity:f32) {
-        if intensity < 0.0 {self.red=0; self.green=0; self.blue=0;}
-        else {
-            self.red = (self.red as f32 * intensity) as u8;
-            self.green = (self.green as f32 * intensity) as u8;
-            self.blue = (self.blue as f32 * intensity) as u8;
-        }
-    }
-    pub fn to_vector(&self)->Vector<f32>{
-        Vector::new(self.red as f32/127.5-1.,self.green as f32/127.5-1.,(self.blue as f32-128.)/127.*(-1.))
-    }
-}
 
-//#[derive(Clone)]
 pub struct TGAImage{
     pub height:usize,
     pub width:usize,
@@ -74,6 +39,19 @@ impl TGAImage {
         if z_buff[index] < vec.z {
             pixels[index] = pixel;
             z_buff[index] = vec.z;
+        }
+    }
+
+    fn set_pixels(&self,tulp:Vec<(Vector<f32>, TGAColor)>){
+        let mut z_buff=self.z_buff.lock().unwrap();
+        let mut pixels=self.pixels.lock().unwrap();
+        for (point,pixel) in tulp{
+            let index = point.y as usize * self.width + point.x as usize;
+            if index>pixels.len(){continue}
+            if z_buff[index] < point.z {
+                pixels[index] = pixel;
+                z_buff[index] = point.z;
+            }
         }
     }
 
@@ -122,35 +100,36 @@ impl TGAImage {
         Ok(())
     }
 
-    pub fn fill_triangle(&self, light:&Vector<f32>, dim_coord: &mut [Vector<f32>],text_coord:&mut [Vector<f32>]
-    ,texture:&Arc<Texture>,norm_coord:&mut [Vector<f32>],norm_map:&Arc<Texture>) {
-//        println!("drawing triangle {:?}",dim_coord);
+    pub fn fill_triangle(&self, light:&Vector<f32>, coords: &mut [Vector<f32>],text_coords:&mut [Vector<f32>]
+    ,texture:&Option<Arc<Texture>>,norm_coords:&mut [Vector<f32>],norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>) {
 
-        if dim_coord[0].y==dim_coord[1].y && dim_coord[0].y==dim_coord[2].y{return;}
+        if coords[0].y==coords[1].y && coords[0].y==coords[2].y{return;}
 
-        if dim_coord[0].y>dim_coord[1].y{dim_coord.swap(0,1); text_coord.swap(0,1); norm_coord.swap(0,1);}
-        if dim_coord[0].y>dim_coord[2].y{dim_coord.swap(0,2); text_coord.swap(0,2); norm_coord.swap(0,2);}
-        if dim_coord[1].y>dim_coord[2].y{dim_coord.swap(1,2); text_coord.swap(1,2); norm_coord.swap(1,2);}
+        if coords[0].y>coords[1].y{coords.swap(0,1); text_coords.swap(0,1); norm_coords.swap(0,1);}
+        if coords[0].y>coords[2].y{coords.swap(0,2); text_coords.swap(0,2); norm_coords.swap(0,2);}
+        if coords[1].y>coords[2].y{coords.swap(1,2); text_coords.swap(1,2); norm_coords.swap(1,2);}
 
-        let (mut uvA,mut uvB)=(text_coord[0],text_coord[0]);
-        let (mut A,mut B)=(dim_coord[0],dim_coord[0]);
-        let (mut unA,mut unB)=(norm_coord[0],norm_coord[0]);
+        let mut pixels=Vec::new();
 
-        let tg1_text=(text_coord[2]-text_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
-        let mut tg2_text=(text_coord[1]-text_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
-        let tg1_norm=(norm_coord[2]-norm_coord[0]) / (dim_coord[2].y-dim_coord[0].y);
-        let mut tg2_norm=(norm_coord[1]-norm_coord[0])/ (dim_coord[1].y-dim_coord[0].y);
-        let tg_last=(dim_coord[2]-dim_coord[0])/(dim_coord[2].y-dim_coord[0].y);
-        let mut tg_middle=(dim_coord[1]-dim_coord[0])/(dim_coord[1].y-dim_coord[0].y);
+        let (mut uvA,mut uvB)=(text_coords[0],text_coords[0]);
+        let (mut A,mut B)=(coords[0],coords[0]);
+        let (mut unA,mut unB)=(norm_coords[0],norm_coords[0]);
 
-        for dy in dim_coord[0].y as usize..dim_coord[2].y as usize{
-            if dim_coord[1].y as usize==dy{
-                uvB=text_coord[1];
-                tg2_text=(text_coord[2]-text_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
-                unB=norm_coord[1];
-                tg2_norm=(norm_coord[2]-norm_coord[1])/ (dim_coord[2].y-dim_coord[1].y);
-                B=dim_coord[1];
-                tg_middle=(dim_coord[2]-dim_coord[1])/(dim_coord[2].y-dim_coord[1].y);
+        let tg1_text=(text_coords[2]-text_coords[0]) / (coords[2].y-coords[0].y);
+        let mut tg2_text=(text_coords[1]-text_coords[0])/ (coords[1].y-coords[0].y);
+        let tg1_norm=(norm_coords[2]-norm_coords[0]) / (coords[2].y-coords[0].y);
+        let mut tg2_norm=(norm_coords[1]-norm_coords[0])/ (coords[1].y-coords[0].y);
+        let tg_last=(coords[2]-coords[0])/(coords[2].y-coords[0].y);
+        let mut tg_middle=(coords[1]-coords[0])/(coords[1].y-coords[0].y);
+
+        for dy in coords[0].y as usize..coords[2].y as usize{
+            if coords[1].y as usize==dy{
+                uvB=text_coords[1];
+                tg2_text=(text_coords[2]-text_coords[1])/ (coords[2].y-coords[1].y);
+                unB=norm_coords[1];
+                tg2_norm=(norm_coords[2]-norm_coords[1])/ (coords[2].y-coords[1].y);
+                B=coords[1];
+                tg_middle=(coords[2]-coords[1])/(coords[2].y-coords[1].y);
             }
 
             let (start,end)=if A.x<B.x{(A,B)}
@@ -163,13 +142,22 @@ impl TGAImage {
                 let P=A+(B-A)*phi;
                 let uvP=uvA+(uvB-uvA)*phi;
                 let unP=unA+(unB-unA)*phi;
-//                println!("x {}, y{}",uvP.x as usize,uvP.y);
-                let mut pixel=texture.get_pixel(uvP.x as usize,uvP.y as usize);
-                let norm_pixel=norm_map.get_pixel(unP.x as usize,unP.y as usize).to_vector().normalize();
-                let intensity=norm_pixel.scalar_prod(light)*1.5;
-//                println!("intensity {}",intensity);
+
+                let mut pixel= match texture {
+                    Some(val)=>val.get_pixel(uvP.x as usize,uvP.y as usize),
+                    None=> TGAColor::new(0,0,0,255),
+                };
+                let mut intensity=0.;
+                if let Some(val)=norm_map{
+                    let norm_pixel=val.get_pixel(unP.x as usize,unP.y as usize).to_vector().normalize();
+                    intensity+=norm_pixel.scalar_prod(light);
+                };
+                if let Some(val)=sp_map{
+                    intensity+=val.get_pixel_grey(unP.x as usize,unP.y as usize)*0.6;
+                };
+//                let intensity=norm_pixel.scalar_prod(light)*1.5;
                 pixel.add_intensity(intensity);
-                self.set_pixel(P,pixel);
+                pixels.push((P,pixel));
             }
             unA=unA+tg1_norm;
             unB=unB+tg2_norm;
@@ -178,9 +166,10 @@ impl TGAImage {
             A=A+tg_last;
             B=B+tg_middle;
         }
+        self.set_pixels(pixels);
     }
 
-    pub fn flip_vertically(&mut self) {
+    pub fn flip_vertically(&self) {
         let mut top_half = Vec::new();
         let mut pixels=self.pixels.lock().unwrap();
         for y in 0..self.height {
