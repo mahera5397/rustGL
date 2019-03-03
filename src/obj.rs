@@ -1,3 +1,5 @@
+#![feature(duration_as_u128)]
+
 use crate::texture::Texture;
 use crate::dimensional::Vector;
 use crate::file_input;
@@ -7,57 +9,49 @@ use std::thread;
 use std::sync::Arc;
 use std::fmt::Debug;
 use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 
 const MIN_ON_THREAD:usize=200;
 const NUM_OF_THREAD:usize=4;
 
-#[derive(Clone)]
 pub struct Poly{
     coords:Vec<Vector<f32>>,
-    text_coords:Vec<Vector<f32>>,
-    norm_coords:Vec<Vector<f32>>,
+    text_coords:Arc<Vec<Vector<f32>>>,
+    norm_coords:Arc<Vec<Vector<f32>>>,
 }
 impl Poly {
     pub fn new(tulp:(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<Vector<f32>>))-> Poly {
-        Poly{coords:tulp.0,text_coords:tulp.1,norm_coords:tulp.2}
+        Poly{coords:tulp.0,text_coords:Arc::new(tulp.1),norm_coords:Arc::new(tulp.2)}
     }
     fn draw_self(&mut self, image:& Arc<TGAImage>, light: &Vector<f32>,
                  text_map:&Option<Arc<Texture>>, norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>){
 
-        image.fill_triangle(light,self.coords.as_mut_slice(),self.text_coords.as_mut_slice(),text_map
-                            ,self.norm_coords.as_mut_slice(),norm_map,sp_map);
+        image.fill_triangle(light,self.coords.as_mut_slice(),self.text_coords.clone(),text_map
+                            ,self.norm_coords.clone(),norm_map,sp_map);
     }
 }
+impl Clone for Poly{
+    fn clone(&self) -> Self {
+        Poly{coords:self.coords.clone(),text_coords:self.text_coords.clone(),norm_coords:self.norm_coords.clone()}
+    }
+}
+
 pub struct Object{
-    polygons:Arc<Vec<Mutex<Poly>>>,
+    polygons:Vec<Poly>,
     position:Vector<f32>,
     mod_matrix:Option<Matrix>,
     text_map:Option<Arc<Texture>>,
     norm_map:Option<Arc<Texture>>,
     sp_map:Option<Arc<Texture>>,
     pointer:usize,
-    start:usize,
-    end:usize,
 }
-impl Clone for Object{
-    fn clone(&self) -> Self {
-        let mut polygons=Vec::new();
-        for poly in self.polygons.as_ref(){
-            polygons.push(Mutex::new(poly.lock().unwrap().clone()));
-        }
-        let polygons=Arc::new(polygons);
 
-        Object{start:0,end:polygons.len(),polygons,  mod_matrix:self.mod_matrix.clone()
-            ,position:self.position, text_map:self.text_map.clone()
-            ,norm_map:self.norm_map.clone(),sp_map:self.sp_map.clone(),pointer:0}
-    }
-}
 impl Object{
     pub fn new(position:Vector<f32>)->Object{
-        let polygons=Arc::new(Vec::new());
-        Object{start:0,end:polygons.len(),polygons,
-            mod_matrix:None,position,text_map:None,norm_map:None,sp_map:None,pointer:0}
+        let polygons=Vec::new();
+        Object{polygons, mod_matrix:None,position,text_map:None,norm_map:None,sp_map:None,pointer:0}
     }
 
     pub fn set_text_map(mut self,text_map:Arc<Texture>)->Self{
@@ -75,9 +69,9 @@ impl Object{
     pub fn set_position(&mut self,position:Vector<f32>){
         self.position=position;
     }
+
     pub fn build(mut self, file_path:&str)->Self{
         let triangles=file_input::read_file(file_path);
-        let mut polygons=Vec::new();
         for mut triangle in triangles{
             if let Some(text_map)=&self.text_map{
                 triangle.1=triangle.1
@@ -93,24 +87,21 @@ impl Object{
                     .collect::<Vec<Vector<f32>>>();
             };
             let poly = Poly::new(triangle);
-            polygons.push(Mutex::new(poly));
+            self.polygons.push(poly);
         }
-        self.end=polygons.len();
-        self.polygons=Arc::new(polygons);
         self
     }
 
     fn from_obj(&self,first:usize,last:usize)->Object{
-        let polygons=self.polygons.clone();
+        let polygons=self.polygons[first..last].to_vec();
 
-        Object{start:first,end:last,polygons,  mod_matrix:self.mod_matrix.clone()
+        Object{polygons,  mod_matrix:self.mod_matrix.clone()
             ,position:self.position,    text_map:self.text_map.clone()
             ,norm_map:self.norm_map.clone(),sp_map:self.sp_map.clone(),pointer:0}
     }
 
-    fn draw_self(&self,image:Arc<TGAImage>,light: Vector<f32>,sight: Vector<f32>) {
-        for index in self.start..self.end{
-            let mut poly=self.polygons[index].lock().unwrap();
+    fn draw_self(&mut self,image:Arc<TGAImage>,light: Vector<f32>,sight: Vector<f32>) {
+        for poly in &mut self.polygons{
             let vec0 = poly.coords[0] - poly.coords[1];
             let vec1 = poly.coords[0] - poly.coords[2];
 
@@ -180,26 +171,21 @@ pub trait PortionIterator{
     fn next(& mut self,portion:usize)->Option<Self::Item>;
     fn rewind(&mut self);
 }
-
-pub struct Scene{
-    pub objects:Vec<Object>,
-    image:Arc<TGAImage>,
+#[derive(Clone)]
+pub struct SceneContext{
     view_port:Matrix,
     projection:Matrix,
     light:Vector<f32>,
     eye:Vector<f32>,
     up:Vector<f32>,
     visible:Vector<f32>,
-    total_triangles:usize,
 }
-impl Clone for Scene{
-    fn clone(&self) -> Scene {
-        let image=Arc::new(TGAImage::new(self.image.height,self.image.width));
-        Scene{objects:self.objects.clone(),image,view_port:self.view_port.clone()
-            ,projection:self.projection.clone(),light:self.light.clone(),
-            eye:self.eye.clone(),up:self.up.clone(),visible:self.visible.clone(),
-            total_triangles:self.total_triangles }
-    }
+
+pub struct Scene{
+    pub objects:Vec<Object>,
+    image:Arc<TGAImage>,
+    context:SceneContext,
+    total_triangles:usize,
 }
 
 impl Scene{
@@ -211,7 +197,8 @@ impl Scene{
         let view_port=Matrix::view_port(-2.,-2.,2.,2.);
         let image=Arc::new(TGAImage::new(height,width));
         let visible=Vector::new(0.,0.,1.);
-        Scene{objects:Vec::new(),image,light,eye,visible,projection,view_port,up,total_triangles:0}
+        let context=SceneContext{light,eye,visible,projection,view_port,up,};
+        Scene{objects:Vec::new(),image,context,total_triangles:0}
     }
 
     pub fn add_obj(&mut self,obj:Object){
@@ -219,29 +206,9 @@ impl Scene{
         self.objects.push(obj);
     }
 
-    pub fn screen_basis(&mut self)->&mut Self{
-        for obj in &mut self.objects{
-            let mut mod_matrix=self.view_port.multiply(&self.projection)
-                .multiply(&look_at(self.eye,obj.position,self.up));
-            if let Some(mat)=&obj.mod_matrix{
-                mod_matrix=mod_matrix.multiply(mat);
-            }
-
-            for poly in obj.polygons.as_slice(){
-                let mut poly=poly.lock().unwrap();
-                for point in poly.coords.as_mut_slice(){
-                    *point=mod_matrix.multiply(&point.to_matrix())
-                        .to_vector()
-                        .to_plane(self.image.height,self.image.width);
-                }
-            }
-        }
-        self
-    }
-
     pub fn draw(& mut self)->&TGAImage{
-        //TODO do smth with it
-        let FILE_OUTPUT_PATH:&str="image.tga";
+        self.image=Arc::new(TGAImage::new(self.image.height,self.image.width));
+        for obj in self.objects.as_mut_slice(){obj.rewind();}
 
         let portion=if self.total_triangles/MIN_ON_THREAD>=NUM_OF_THREAD{
             self.total_triangles/(NUM_OF_THREAD)
@@ -267,14 +234,32 @@ impl Scene{
         let mut handles =Vec::new();
 
         for job in jobs{
-            let (light,visible)=(self.light.clone(),self.visible.clone());
+            let (height,width)=(self.image.height,self.image.width);
             let image=self.image.clone();
+            let context=self.context.clone();
+
             let handle=thread::spawn(move|| {
-                let image=image;
+                let now=SystemTime::now();
                 for mut obj in job {
-                    //println!("thread created");
-                    obj.draw_self(image.clone(),light,visible);
+
+                        let mut mod_matrix=context.view_port.multiply(&context.projection)
+                            .multiply(&look_at(context.eye,obj.position,context.up));
+                        if let Some(mat)=&obj.mod_matrix{
+                            mod_matrix=mod_matrix.multiply(mat);
+                        }
+
+                        for poly in obj.polygons.as_mut_slice(){
+                            for mut point in poly.coords.as_mut_slice(){
+                                *point=mod_matrix.multiply(&point.to_matrix())
+                                    .to_vector()
+                                    .to_plane(height,width);
+                            }
+                        }
+
+                    obj.draw_self(image.clone(),context.light,context.visible);
                 }
+                let t=now.elapsed().unwrap().as_nanos();
+                println!("thread time {}",t);
             });
             handles.push(handle);
         }
@@ -283,7 +268,7 @@ impl Scene{
         }
         //self.image.flip_vertically();
         //self.image.write_tga_file(FILE_OUTPUT_PATH);
-        &self.image //.clone()
+        &self.image
     }
 }
 

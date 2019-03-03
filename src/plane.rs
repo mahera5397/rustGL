@@ -101,34 +101,41 @@ impl TGAImage {
         Ok(())
     }
 
-    pub fn fill_triangle(&self, light:&Vector<f32>, coords: &mut [Vector<f32>],text_coords:&mut [Vector<f32>]
-    ,texture:&Option<Arc<Texture>>,norm_coords:&mut [Vector<f32>],norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>) {
+    pub fn fill_triangle(&self, light:&Vector<f32>, coords: &mut [Vector<f32>],text_coords:Arc<Vec<Vector<f32>>>
+    ,texture:&Option<Arc<Texture>>,norm_coords:Arc<Vec<Vector<f32>>>,norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>) {
 
         if coords[0].y==coords[1].y && coords[0].y==coords[2].y{return;}
-
-        if coords[0].y>coords[1].y{coords.swap(0,1); text_coords.swap(0,1); norm_coords.swap(0,1);}
-        if coords[0].y>coords[2].y{coords.swap(0,2); text_coords.swap(0,2); norm_coords.swap(0,2);}
-        if coords[1].y>coords[2].y{coords.swap(1,2); text_coords.swap(1,2); norm_coords.swap(1,2);}
+        //copy on demand
+        let (text_coord,norm_coord)=
+            if coords[0].y<coords[1].y && coords[1].y<coords[2].y {
+                (text_coords, norm_coords)
+            }else{
+                let (mut text_coords,mut norm_coords)=(text_coords.to_vec(),norm_coords.to_vec());
+                if coords[0].y>coords[1].y{coords.swap(0,1); text_coords.swap(0,1); norm_coords.swap(0,1);}
+                if coords[0].y>coords[2].y{coords.swap(0,2); text_coords.swap(0,2); norm_coords.swap(0,2);}
+                if coords[1].y>coords[2].y{coords.swap(1,2); text_coords.swap(1,2); norm_coords.swap(1,2);}
+                (Arc::new(text_coords), Arc::new(norm_coords))
+            };
 
         let mut pixels=Vec::new();
 
-        let (mut uvA,mut uvB)=(text_coords[0],text_coords[0]);
+        let (mut uvA,mut uvB)=(text_coord[0],text_coord[0]);
         let (mut A,mut B)=(coords[0],coords[0]);
-        let (mut unA,mut unB)=(norm_coords[0],norm_coords[0]);
+        let (mut unA,mut unB)=(norm_coord[0],norm_coord[0]);
 
-        let tg1_text=(text_coords[2]-text_coords[0]) / (coords[2].y-coords[0].y);
-        let mut tg2_text=(text_coords[1]-text_coords[0])/ (coords[1].y-coords[0].y);
-        let tg1_norm=(norm_coords[2]-norm_coords[0]) / (coords[2].y-coords[0].y);
-        let mut tg2_norm=(norm_coords[1]-norm_coords[0])/ (coords[1].y-coords[0].y);
+        let tg1_text=(text_coord[2]-text_coord[0]) / (coords[2].y-coords[0].y);
+        let mut tg2_text=(text_coord[1]-text_coord[0])/ (coords[1].y-coords[0].y);
+        let tg1_norm=(norm_coord[2]-norm_coord[0]) / (coords[2].y-coords[0].y);
+        let mut tg2_norm=(norm_coord[1]-norm_coord[0])/ (coords[1].y-coords[0].y);
         let tg_last=(coords[2]-coords[0])/(coords[2].y-coords[0].y);
         let mut tg_middle=(coords[1]-coords[0])/(coords[1].y-coords[0].y);
 
         for dy in coords[0].y as usize..coords[2].y as usize{
             if coords[1].y as usize==dy{
-                uvB=text_coords[1];
-                tg2_text=(text_coords[2]-text_coords[1])/ (coords[2].y-coords[1].y);
-                unB=norm_coords[1];
-                tg2_norm=(norm_coords[2]-norm_coords[1])/ (coords[2].y-coords[1].y);
+                uvB=text_coord[1];
+                tg2_text=(text_coord[2]-text_coord[1])/ (coords[2].y-coords[1].y);
+                unB=norm_coord[1];
+                tg2_norm=(norm_coord[2]-norm_coord[1])/ (coords[2].y-coords[1].y);
                 B=coords[1];
                 tg_middle=(coords[2]-coords[1])/(coords[2].y-coords[1].y);
             }

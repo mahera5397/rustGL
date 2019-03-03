@@ -69,6 +69,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use std::time::SystemTime;
 
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
@@ -88,8 +89,7 @@ pub fn main() -> Result<(), String> {
 
     let mut scene= get_scene();
 
-    let buff=scene.clone()
-        .screen_basis()
+    let buff=scene
         .draw()
         .as_vec();
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
@@ -112,11 +112,12 @@ pub fn main() -> Result<(), String> {
                     break 'running
                 },
                 Event::KeyDown {keycode: Some(Keycode::W),..}=>{
+                    let now=SystemTime::now();
+
                     scene.objects[0].rotate_y(5.);
                     scene.objects[1].rotate_y(5.);
 
-                    let buff=scene.clone()
-                        .screen_basis()
+                    let buff=scene
                         .draw()
                         .as_vec();
                     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
@@ -125,10 +126,11 @@ pub fn main() -> Result<(), String> {
                         }
                     })?;
 
-                    canvas.clear();
                     canvas.copy(&texture, None, Some(Rect::new(0, 0, SIZE as u32, SIZE as u32)))?;
                     canvas.present();
 
+                    let t=now.elapsed().unwrap().as_nanos();
+                    println!("frame time {}",t);
                 },
                 _ => {}
             }
