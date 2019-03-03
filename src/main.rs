@@ -46,12 +46,12 @@ fn get_scene() ->Scene{
     let position=Vector::new(0.,0.,0.);
         //.normalize();
 
-    let mut head=Object::new(position)
+    let head=Object::new(position)
         .set_text_map(head_texture)
         .set_norm_map(head_nm)
         .set_sp_map(head_sp)
         .build(HEAD_OBJ_PATH);
-    let mut eyes =Object::new(position)
+    let eyes =Object::new(position)
         .set_text_map(eye_texture)
         .set_norm_map(eye_nm)
         .build(EYE_OBJ_PATH);
@@ -69,6 +69,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use std::time::SystemTime;
 
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
@@ -83,20 +84,17 @@ pub fn main() -> Result<(), String> {
     let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
     let texture_creator = canvas.texture_creator();
 
+//    let w=texture_creator.create_texture(PixelFormatEnum::RGBA32,);
     let mut texture = texture_creator.create_texture_streaming(PixelFormatEnum::RGBA32, SIZE as u32, SIZE as u32)
         .map_err(|e| e.to_string())?;
 
     let mut scene= get_scene();
 
-    let buff=scene.clone()
-        .screen_basis()
-        .draw()
-        .as_vec();
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        for (index,val) in buff.iter().enumerate(){
-            buffer[index]=*val;
-        }
-    })?;
+    let mut buff=scene.draw().as_vec();
+
+    texture.with_lock(None, move|mut buffer: &mut [u8] , pitch: usize|
+        buffer.swap_with_slice(buff[..buffer.len()].as_mut())
+    )?;
 
     canvas.clear();
     canvas.copy(&texture, None, Some(Rect::new(0, 0, SIZE as u32, SIZE as u32)))?;
@@ -111,24 +109,33 @@ pub fn main() -> Result<(), String> {
                 | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
-                Event::KeyDown {keycode: Some(Keycode::W),..}=>{
-                    scene.objects[0].rotate_y(5.);
-                    scene.objects[1].rotate_y(5.);
+                Event::KeyDown {..}=>{
+                    match event {
+                        Event::KeyDown {keycode: Some(Keycode::W),..}=>{
+                            scene.objects[0].rotate_y(5.);
+                            scene.objects[1].rotate_y(5.);
+                        },
+                        Event::KeyDown {keycode: Some(Keycode::S),..}=>{
+                            scene.objects[0].rotate_y(-5.);
+                            scene.objects[1].rotate_y(-5.);
+                        },
+                        Event::KeyDown {keycode: Some(Keycode::D),..}=>{
+                            scene.objects[0].rotate_x(5.);
+                            scene.objects[1].rotate_x(5.);
+                        },
+                        Event::KeyDown {keycode: Some(Keycode::A),..}=>{
+                            scene.objects[0].rotate_x(-5.);
+                            scene.objects[1].rotate_x(-5.);
+                        },
+                        _ => {}
+                    }
+                    let mut buff=scene.draw().as_vec();
+                    texture.with_lock(None, move|mut buffer: &mut [u8] , pitch: usize|
+                        buffer.swap_with_slice(buff[..buffer.len()].as_mut())
+                    )?;
 
-                    let buff=scene.clone()
-                        .screen_basis()
-                        .draw()
-                        .as_vec();
-                    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                        for (index,val) in buff.iter().enumerate(){
-                            buffer[index]=*val;
-                        }
-                    })?;
-
-                    canvas.clear();
                     canvas.copy(&texture, None, Some(Rect::new(0, 0, SIZE as u32, SIZE as u32)))?;
                     canvas.present();
-
                 },
                 _ => {}
             }

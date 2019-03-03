@@ -105,7 +105,6 @@ impl TGAImage {
     ,texture:&Option<Arc<Texture>>,norm_coords:&mut [Vector<f32>],norm_map:&Option<Arc<Texture>>,sp_map:&Option<Arc<Texture>>) {
 
         if coords[0].y==coords[1].y && coords[0].y==coords[2].y{return;}
-
         if coords[0].y>coords[1].y{coords.swap(0,1); text_coords.swap(0,1); norm_coords.swap(0,1);}
         if coords[0].y>coords[2].y{coords.swap(0,2); text_coords.swap(0,2); norm_coords.swap(0,2);}
         if coords[1].y>coords[2].y{coords.swap(1,2); text_coords.swap(1,2); norm_coords.swap(1,2);}

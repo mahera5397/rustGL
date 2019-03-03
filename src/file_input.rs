@@ -77,7 +77,7 @@ pub fn read_file(file_path:&str) ->Vec<(Vec<Vector<f32>>, Vec<Vector<f32>>,Vec<V
 }
 
 pub fn read_texture_file(path:&str,color_format:Colors)->Result<Arc<Texture>,io::Error>{
-    let texture=File::open(path)?;//.unwrap_or(return None);
+    let texture=File::open(path)?;
     let mut reader=BufReader::new(texture);
     let texture=match color_format {
         Colors::RGBA=> imagefmt::read_from(&mut reader,imagefmt::ColFmt::RGBA).unwrap(),
