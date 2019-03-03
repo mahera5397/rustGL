@@ -40,7 +40,19 @@ pub struct Object{
     start:usize,
     end:usize,
 }
+impl Clone for Object{
+    fn clone(&self) -> Self {
+        let mut polygons=Vec::new();
+        for poly in self.polygons.as_ref(){
+            polygons.push(Mutex::new(poly.lock().unwrap().clone()));
+        }
+        let polygons=Arc::new(polygons);
 
+        Object{start:0,end:polygons.len(),polygons,  mod_matrix:self.mod_matrix.clone()
+            ,position:self.position, text_map:self.text_map.clone()
+            ,norm_map:self.norm_map.clone(),sp_map:self.sp_map.clone(),pointer:0}
+    }
+}
 impl Object{
     pub fn new(position:Vector<f32>)->Object{
         let polygons=Arc::new(Vec::new());
@@ -59,6 +71,9 @@ impl Object{
     pub fn set_sp_map(mut self,sp_map:Arc<Texture>)->Self{
         self.sp_map=Some(sp_map);
         self
+    }
+    pub fn set_position(&mut self,position:Vector<f32>){
+        self.position=position;
     }
     pub fn build(mut self, file_path:&str)->Self{
         let triangles=file_input::read_file(file_path);
@@ -138,22 +153,6 @@ impl Object{
     }
 }
 
-//    pub fn apply(&mut self){
-//        if !self.is_applied{
-//            let mod_matrix=self.mod_matrix.clone();
-//            for  poly in self.polygons.iter_mut() {
-//                poly.coords=
-//                    poly.coords.iter()
-//                    .map(|element|
-//                        mod_matrix
-//                            .multiply(&element.to_matrix())
-//                            .to_vector())
-//                    .collect::<Vec<Vector<f32>>>();
-//                self.is_applied = true;
-//            }
-//        }
-//    }
-
 impl PortionIterator for Object{
     type Item = Object;
 
@@ -183,7 +182,7 @@ pub trait PortionIterator{
 }
 
 pub struct Scene{
-    objects:Vec<Object>,
+    pub objects:Vec<Object>,
     image:Arc<TGAImage>,
     view_port:Matrix,
     projection:Matrix,
@@ -192,6 +191,15 @@ pub struct Scene{
     up:Vector<f32>,
     visible:Vector<f32>,
     total_triangles:usize,
+}
+impl Clone for Scene{
+    fn clone(&self) -> Scene {
+        let image=Arc::new(TGAImage::new(self.image.height,self.image.width));
+        Scene{objects:self.objects.clone(),image,view_port:self.view_port.clone()
+            ,projection:self.projection.clone(),light:self.light.clone(),
+            eye:self.eye.clone(),up:self.up.clone(),visible:self.visible.clone(),
+            total_triangles:self.total_triangles }
+    }
 }
 
 impl Scene{
@@ -211,7 +219,7 @@ impl Scene{
         self.objects.push(obj);
     }
 
-    pub fn screen_basis(&mut self){
+    pub fn screen_basis(&mut self)->&mut Self{
         for obj in &mut self.objects{
             let mut mod_matrix=self.view_port.multiply(&self.projection)
                 .multiply(&look_at(self.eye,obj.position,self.up));
@@ -228,6 +236,7 @@ impl Scene{
                 }
             }
         }
+        self
     }
 
     pub fn draw(& mut self)->&TGAImage{
@@ -263,6 +272,7 @@ impl Scene{
             let handle=thread::spawn(move|| {
                 let image=image;
                 for mut obj in job {
+                    //println!("thread created");
                     obj.draw_self(image.clone(),light,visible);
                 }
             });
@@ -271,8 +281,8 @@ impl Scene{
         for handle in handles{
             handle.join().unwrap();
         }
-        self.image.flip_vertically();
-        self.image.write_tga_file(FILE_OUTPUT_PATH);
+        //self.image.flip_vertically();
+        //self.image.write_tga_file(FILE_OUTPUT_PATH);
         &self.image //.clone()
     }
 }

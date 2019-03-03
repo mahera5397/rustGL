@@ -20,7 +20,7 @@ pub struct TGAImage{
 
 impl TGAImage {
     pub fn new(height: usize, width: usize) -> TGAImage {
-        let pixels =Mutex::new( vec![TGAColor::new(255, 255, 255, 255); height * width]);
+        let pixels =Mutex::new( vec![TGAColor::new(255, 0, 255, 255); height * width]);
         let z_buff = Mutex::new(vec![f32::MIN; height * width]);
         TGAImage { height, width, pixels, z_buff }
     }
@@ -46,6 +46,7 @@ impl TGAImage {
         let mut z_buff=self.z_buff.lock().unwrap();
         let mut pixels=self.pixels.lock().unwrap();
         for (point,pixel) in tulp{
+            if point.x<0.||point.y<0.{return;}
             let index = point.y as usize * self.width + point.x as usize;
             if index>pixels.len(){continue}
             if z_buff[index] < point.z {
@@ -55,7 +56,7 @@ impl TGAImage {
         }
     }
 
-    fn as_vec(&self) -> Vec<u8> {
+    pub fn as_vec(&self) -> Vec<u8> {
         TGAColor::from_arr_to_arr(self.pixels.lock().unwrap().as_slice())
     }
 
@@ -155,7 +156,6 @@ impl TGAImage {
                 if let Some(val)=sp_map{
                     intensity+=val.get_pixel_grey(unP.x as usize,unP.y as usize)*0.6;
                 };
-//                let intensity=norm_pixel.scalar_prod(light)*1.5;
                 pixel.add_intensity(intensity);
                 pixels.push((P,pixel));
             }

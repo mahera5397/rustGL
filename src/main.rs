@@ -1,3 +1,5 @@
+extern crate sdl2;
+
 use simpleOpenGL::dimensional::Vector;
 use simpleOpenGL::file_input::read_texture_file;
 use simpleOpenGL::obj::Scene;
@@ -24,9 +26,9 @@ const FLOOR_OBJ_PATH:&str="floor.obj";
 const FLOOR_TEXTURE_PATH:&str="floor_diff.tga";
 const FLOOR_NORMAL_PATH:&str="floor_nm.tga";
 
-const SIZE:usize=5000;
+const SIZE:usize=500;
 
-fn main(){
+fn get_scene() ->Scene{
     let head_texture=read_texture_file(HEAD_TEXTURE_PATH,Colors::RGBA).unwrap();
     let head_nm=read_texture_file(HEAD_NORMAL_PATH,Colors::RGBA).unwrap();
     let head_sp=read_texture_file(HEAD_SP_PATH,Colors::Gray).unwrap();
@@ -54,24 +56,85 @@ fn main(){
         .set_norm_map(eye_nm)
         .build(EYE_OBJ_PATH);
 
-//    let mut eyes_outer =Object::new(EYE_OUTER_OBJ_PATH,eye_outer_texture,eye_outer_nm,position);
-//    let floor =Object::new(FLOOR_OBJ_PATH,floor_texture,floor_nm,position);
-
-    head.rotate_x(20.)
-        .rotate_y(20.)
-        .rotate_z(20.);
-    eyes.rotate_x(20.)
-        .rotate_y(20.)
-        .rotate_z(20.);
-//    eyes_outer.rotate_x(20.)
-//        .rotate_y(20.)
-//        .rotate_z(20.);
 
     scene.add_obj(head);
     scene.add_obj(eyes);
-    //scene.add_obj(eyes_outer);
-    //scene.add_obj(floor);
 
-    scene.screen_basis();
-    scene.draw();
+    scene
+}
+
+
+
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+
+pub fn main() -> Result<(), String> {
+    let sdl_context = sdl2::init()?;
+    let video_subsystem = sdl_context.video()?;
+
+    let window = video_subsystem.window("rust-sdl2 demo: Video", SIZE as u32,SIZE as u32)
+        .position_centered()
+        .opengl()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+    let texture_creator = canvas.texture_creator();
+
+    let mut texture = texture_creator.create_texture_streaming(PixelFormatEnum::RGBA32, SIZE as u32, SIZE as u32)
+        .map_err(|e| e.to_string())?;
+
+    let mut scene= get_scene();
+
+    let buff=scene.clone()
+        .screen_basis()
+        .draw()
+        .as_vec();
+    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+        for (index,val) in buff.iter().enumerate(){
+            buffer[index]=*val;
+        }
+    })?;
+
+    canvas.clear();
+    canvas.copy(&texture, None, Some(Rect::new(0, 0, SIZE as u32, SIZE as u32)))?;
+    canvas.present();
+
+    let mut event_pump = sdl_context.event_pump()?;
+
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..}
+                | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+                Event::KeyDown {keycode: Some(Keycode::W),..}=>{
+                    scene.objects[0].rotate_y(5.);
+                    scene.objects[1].rotate_y(5.);
+
+                    let buff=scene.clone()
+                        .screen_basis()
+                        .draw()
+                        .as_vec();
+                    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                        for (index,val) in buff.iter().enumerate(){
+                            buffer[index]=*val;
+                        }
+                    })?;
+
+                    canvas.clear();
+                    canvas.copy(&texture, None, Some(Rect::new(0, 0, SIZE as u32, SIZE as u32)))?;
+                    canvas.present();
+
+                },
+                _ => {}
+            }
+        }
+        // The rest of the game loop goes here...
+    }
+
+    Ok(())
 }
