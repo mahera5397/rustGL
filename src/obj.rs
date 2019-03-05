@@ -7,10 +7,7 @@ use crate::matrix::Matrix;
 use crate::plane::TGAImage;
 use std::thread;
 use std::sync::Arc;
-use std::fmt::Debug;
-use std::sync::Mutex;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 
 const MIN_ON_THREAD:usize=200;
@@ -167,6 +164,7 @@ pub trait PortionIterator{
     fn next(& mut self,portion:usize)->Option<Self::Item>;
     fn rewind(&mut self);
 }
+
 #[derive(Clone)]
 pub struct SceneContext{
     view_port:Matrix,
@@ -245,7 +243,7 @@ impl Scene{
                         }
 
                         for poly in obj.polygons.as_mut_slice(){
-                            for mut point in poly.coords.as_mut_slice(){
+                            for point in poly.coords.as_mut_slice(){
                                 *point=mod_matrix.multiply(&point.to_matrix())
                                     .to_vector()
                                     .to_plane(height,width);

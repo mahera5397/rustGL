@@ -8,15 +8,15 @@ use simpleOpenGL::colors::Colors;
 
 const FILE_OUTPUT_PATH:&str="image.tga";
 
-const HEAD_OBJ_PATH:&str="african_head.obj";
-const HEAD_TEXTURE_PATH:&str="diff_text.tga";
-const HEAD_NORMAL_PATH:&str="norm_map.tga";
-const HEAD_SP_PATH:&str="spec_map.tga";
+const HEAD_OBJ_PATH:&str="objs/african_head.obj";
+const HEAD_TEXTURE_PATH:&str="objs/diff_text.tga";
+const HEAD_NORMAL_PATH:&str="objs/norm_map.tga";
+const HEAD_SP_PATH:&str="objs/spec_map.tga";
 
 
-const EYE_OBJ_PATH:&str="eye.obj";
-const EYE_TEXTURE_PATH:&str="eye_diff.tga";
-const EYE_NORMAL_PATH:&str="eye_nm.tga";
+const EYE_OBJ_PATH:&str="objs/eye.obj";
+const EYE_TEXTURE_PATH:&str="objs/eye_diff.tga";
+const EYE_NORMAL_PATH:&str="objs/eye_nm.tga";
 
 const EYE_OUTER_OBJ_PATH:&str="eye_outer.obj";
 const EYE_OUTER_TEXTURE_PATH:&str="eye_outer_diff.tga";
@@ -35,10 +35,6 @@ fn get_scene() ->Scene{
 
     let eye_texture=read_texture_file(EYE_TEXTURE_PATH,Colors::RGBA).unwrap();
     let eye_nm=read_texture_file(EYE_NORMAL_PATH,Colors::RGBA).unwrap();
-    //let eye_outer_texture=Arc::new(read_texture_file(EYE_OUTER_TEXTURE_PATH));
-    //let eye_outer_nm=Arc::new(read_texture_file(EYE_OUTER_NORMAL_PATH));
-    //let floor_texture=Arc::new(read_texture_file(FLOOR_TEXTURE_PATH));
-    //let floor_nm=Arc::new(read_texture_file(FLOOR_NORMAL_PATH));
 
     let LIGHT_DIR=Vector::new(1.0,1.0,-1.0).normalize();
     let mut scene = Scene::new(SIZE, SIZE, LIGHT_DIR);
@@ -56,7 +52,6 @@ fn get_scene() ->Scene{
         .set_norm_map(eye_nm)
         .build(EYE_OBJ_PATH);
 
-
     scene.add_obj(head);
     scene.add_obj(eyes);
 
@@ -69,7 +64,6 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use std::time::SystemTime;
 
 pub fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
@@ -84,7 +78,6 @@ pub fn main() -> Result<(), String> {
     let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
     let texture_creator = canvas.texture_creator();
 
-//    let w=texture_creator.create_texture(PixelFormatEnum::RGBA32,);
     let mut texture = texture_creator.create_texture_streaming(PixelFormatEnum::RGBA32, SIZE as u32, SIZE as u32)
         .map_err(|e| e.to_string())?;
 
@@ -92,7 +85,7 @@ pub fn main() -> Result<(), String> {
 
     let mut buff=scene.draw().as_vec();
 
-    texture.with_lock(None, move|mut buffer: &mut [u8] , pitch: usize|
+    texture.with_lock(None, move|buffer: &mut [u8] , _pitch: usize|
         buffer.swap_with_slice(buff[..buffer.len()].as_mut())
     )?;
 
@@ -130,7 +123,7 @@ pub fn main() -> Result<(), String> {
                         _ => {}
                     }
                     let mut buff=scene.draw().as_vec();
-                    texture.with_lock(None, move|mut buffer: &mut [u8] , pitch: usize|
+                    texture.with_lock(None, move|buffer: &mut [u8] , _pitch: usize|
                         buffer.swap_with_slice(buff[..buffer.len()].as_mut())
                     )?;
 
@@ -140,7 +133,6 @@ pub fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-        // The rest of the game loop goes here...
     }
 
     Ok(())
